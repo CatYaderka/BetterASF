@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BetterASF</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header id="titlebar">
+  <div class="tb-left pywebview-drag-region">
+    <span class="tb-dot"></span>
+    <span class="tb-title">BetterASF</span>
+    <span id="conn" class="tb-conn tb-conn--off">не подключено</span>
+  </div>
+  <div class="tb-right">
+    <button class="tb-btn" id="themeBtn" title="Сменить тему">
+      <span class="ico-moon">&#9789;</span><span class="ico-sun" style="display:none">&#9728;</span>
+    </button>
+    <div class="win-controls">
+      <button class="tb-btn" id="minBtn" title="Свернуть">&#8211;</button>
+      <button class="tb-btn" id="maxBtn" title="Развернуть">&#9633;</button>
+      <button class="tb-btn close" id="closeBtn" title="Закрыть">&#10005;</button>
+    </div>
+  </div>
+</header>
+
+<div class="app">
+  
+  <nav class="sidebar">
+    <div class="nav-group">
+      <div class="nav-title">Управление</div>
+      <a class="nav-link active" data-view="dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+        <span>Главная</span>
+      </a>
+      <a class="nav-link" data-view="bots">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="3"/><path d="M2 21v-1a6 6 0 0 1 12 0v1M16 3.1a4 4 0 0 1 0 7.8M22 21v-1a6 6 0 0 0-4-5.6"/></svg>
+        <span>Боты</span>
+      </a>
+      <a class="nav-link" data-view="commands">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg>
+        <span>Команды</span>
+      </a>
+      <a class="nav-link" data-view="plugins">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h6v6H4zM14 4h6v6h-6zM14 14h6v6h-6zM4 17h6v3H4z"/></svg>
+        <span>Плагины</span>
+      </a>
+      <a class="nav-link" data-view="log">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/></svg>
+        <span>Журнал</span>
+      </a>
+    </div>
+
+    <div class="nav-group nav-group--bottom">
+      <div class="nav-title">Статистика</div>
+      <div class="stat-grid">
+        <div class="stat-pill"><b id="st-farming">0</b><span>Фарм</span></div>
+        <div class="stat-pill"><b id="st-online">0</b><span>В сети</span></div>
+        <div class="stat-pill"><b id="st-offline">0</b><span>Не в сети</span></div>
+        <div class="stat-pill"><b id="st-total">0</b><span>Всего</span></div>
+      </div>
+      <div class="sys">
+        <div class="sys-row"><span>Память</span><b id="sys-mem">—</b></div>
+        <div class="sys-row"><span>Аптайм</span><b id="sys-up">—</b></div>
+        <div class="sys-row"><span>Версия</span><b id="sys-ver">—</b></div>
+      </div>
+    </div>
+  </nav>
+
+  
+  <main class="content">
+
+    
+    <section class="view active" id="view-dashboard">
+      <div class="view-head">
+        <h1>Главная</h1>
+        <button class="btn ghost" id="refreshBtn">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+          Обновить
+        </button>
+      </div>
+
+      <div class="cards">
+        <div class="info-card">
+          <div class="ic-icon ic-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h4M8 10v4M15 11h.01M18 13h.01"/></svg></div>
+          <div><p class="ic-title">Игр осталось</p><p class="ic-value" id="kpi-games">—</p></div>
+        </div>
+        <div class="info-card">
+          <div class="ic-icon ic-violet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+          <div><p class="ic-title">Времени осталось</p><p class="ic-value" id="kpi-time">—</p></div>
+        </div>
+        <div class="info-card">
+          <div class="ic-icon ic-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="14" height="18" rx="2"/><path d="M7 21V7a2 2 0 0 1 2-2h12v14a2 2 0 0 1-2 2z"/></svg></div>
+          <div><p class="ic-title">Карт осталось</p><p class="ic-value" id="kpi-cards">—</p></div>
+        </div>
+      </div>
+
+      <h2 class="section-title">Боты</h2>
+      <div class="bot-grid" id="dash-bots"><div class="empty">Загрузка…</div></div>
+    </section>
+
+    
+    <section class="view" id="view-bots">
+      <div class="view-head"><h1>Боты</h1></div>
+      <div class="bot-grid bot-grid--full" id="bots-list"><div class="empty">Загрузка…</div></div>
+    </section>
+
+    
+    <section class="view" id="view-commands">
+      <div class="view-head"><h1>Команды</h1></div>
+      <div class="cmd-box">
+        <div class="cmd-row">
+          <input id="cmd-input" placeholder="Введите команду, напр. status ASF" autocomplete="off">
+          <button class="btn primary" id="cmd-send">Выполнить</button>
+        </div>
+        <div class="cmd-hint">
+          Подсказки:
+          <button class="chip" data-cmd="status ASF">status ASF</button>
+          <button class="chip" data-cmd="stats">stats</button>
+          <button class="chip" data-cmd="help">help</button>
+          <button class="chip" data-cmd="version">version</button>
+        </div>
+        <pre class="cmd-output" id="cmd-output">Вывод команды появится здесь…</pre>
+      </div>
+    </section>
+
+    
+    <section class="view" id="view-plugins">
+      <div class="view-head"><h1>Плагины</h1>
+        <button class="btn ghost" id="pluginsRefresh">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+          Обновить
+        </button>
+      </div>
+      <div class="plugin-grid" id="plugins-list"><div class="empty">Загрузка…</div></div>
+    </section>
+
+    <section class="view" id="view-log">
+      <div class="view-head"><h1>Журнал</h1>
+        <button class="btn ghost" id="logClear">Очистить</button>
+      </div>
+      <pre class="cmd-output log-output" id="log-output">Журнал событий интерфейса…
+</pre>
+      <div class="made-by">Made with &lt;3 by CatYaderka</div>
+    </section>
+
+  </main>
+</div>
+
+<button id="boost-fab" class="fab" title="Бустить часы: запустить топ-32 игр по часам на отфармленных аккаунтах">
+  <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M13 2L4.5 13.5H11l-1 8.5L19.5 10H13z"/>
+  </svg>
+</button>
+
+<div id="toast" class="toast"></div>
+
+<div class="modal-overlay" id="addbot-modal">
+  <div class="modal modal--wide modal--scroll">
+    <h2 id="ab-title">Новый бот</h2>
+    <p class="modal-sub">Все настройки задаются здесь — без команд и правки JSON.</p>
+
+    <label class="field-label">Имя бота</label>
+    <input id="ab-name" placeholder="например, main" autocomplete="off">
+
+    <label class="field-label">Логин Steam</label>
+    <input id="ab-login" placeholder="Steam логин" autocomplete="off">
+
+    <label class="field-label">Пароль Steam <span class="field-hint" id="ab-pass-hint"></span></label>
+    <input id="ab-pass" type="password" placeholder="Пароль" autocomplete="off">
+
+    <label class="checkbox-row"><input id="ab-enabled" type="checkbox" checked><span>Включён</span></label>
+
+    <button class="adv-toggle" id="ab-adv-toggle" type="button">
+      <svg class="adv-chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+      Расширенные настройки
+    </button>
+
+    <div class="adv-body" id="ab-adv" style="display:none">
+      <div class="field-row">
+        <div>
+          <label class="field-label">Онлайн-статус</label>
+          <select id="ab-online">
+            <option value="1">В сети</option>
+            <option value="0">Не в сети</option>
+            <option value="2">Не беспокоить</option>
+            <option value="3">Нет на месте</option>
+            <option value="4">Сон</option>
+            <option value="7">Невидимый</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Часов до выпадения карт</label>
+          <input id="ab-hours" type="number" min="0" max="255" value="3">
+        </div>
+      </div>
+
+      <label class="field-label">Фарминг</label>
+      <div class="field-grid">
+        <label class="checkbox-row"><input id="ab-paused" type="checkbox"><span>Пауза по умолчанию</span></label>
+        <label class="checkbox-row"><input id="ab-shutdown" type="checkbox"><span>Выкл. после фарма</span></label>
+        <label class="checkbox-row"><input id="ab-skipunplayed" type="checkbox"><span>Пропускать несыгранные</span></label>
+        <label class="checkbox-row"><input id="ab-priorityonly" type="checkbox"><span>Только приоритетная очередь</span></label>
+      </div>
+
+      <label class="field-label">Обмен и предметы</label>
+      <div class="field-grid">
+        <label class="checkbox-row"><input id="ab-matcher" type="checkbox"><span>STM (обмен карточками)</span></label>
+        <label class="checkbox-row"><input id="ab-matchall" type="checkbox"><span>Обмен на всё</span></label>
+        <label class="checkbox-row"><input id="ab-donations" type="checkbox"><span>Принимать донат</span></label>
+        <label class="checkbox-row"><input id="ab-gifts" type="checkbox"><span>Принимать подарки</span></label>
+      </div>
+
+      <label class="field-label">Поведение</label>
+      <div class="field-grid">
+        <label class="checkbox-row"><input id="ab-rejtrades" type="checkbox"><span>Отклонять чужие обмены</span></label>
+        <label class="checkbox-row"><input id="ab-rejfriends" type="checkbox"><span>Отклонять чужие заявки в друзья</span></label>
+        <label class="checkbox-row"><input id="ab-rejgroups" type="checkbox"><span>Отклонять приглашения в группы</span></label>
+      </div>
+
+      <label class="field-label">Поведение (доп.)</label>
+      <div class="field-grid">
+        <label class="checkbox-row"><input id="ab-dismissnotif" type="checkbox"><span>Скрывать уведомления инвентаря</span></label>
+        <label class="checkbox-row"><input id="ab-markread" type="checkbox"><span>Отмечать сообщения прочитанными</span></label>
+        <label class="checkbox-row"><input id="ab-markself" type="checkbox"><span>Отмечать свои сообщения</span></label>
+        <label class="checkbox-row"><input id="ab-noincoming" type="checkbox"><span>Не разбирать входящие обмены</span></label>
+      </div>
+
+      <label class="field-label">Обмен (доп.)</label>
+      <div class="field-grid">
+        <label class="checkbox-row"><input id="ab-matchactively" type="checkbox"><span>Активный обмен (MatchActively)</span></label>
+        <label class="checkbox-row"><input id="ab-nobottrades" type="checkbox"><span>Не принимать обмены ботов</span></label>
+      </div>
+
+      <label class="field-label">Распространение ключей</label>
+      <div class="field-grid">
+        <label class="checkbox-row"><input id="ab-forwarding" type="checkbox"><span>Forwarding</span></label>
+        <label class="checkbox-row"><input id="ab-distributing" type="checkbox"><span>Distributing</span></label>
+        <label class="checkbox-row"><input id="ab-keepmissing" type="checkbox"><span>Keep missing games</span></label>
+        <label class="checkbox-row"><input id="ab-assumewallet" type="checkbox"><span>Assume wallet key</span></label>
+      </div>
+
+      <div class="field-row">
+        <div>
+          <label class="field-label">Порядок фарма</label>
+          <select id="ab-farmorder">
+            <option value="0">Не упорядочен</option>
+            <option value="1">AppID ↑</option>
+            <option value="2">AppID ↓</option>
+            <option value="3">Карты ↑</option>
+            <option value="4">Карты ↓</option>
+            <option value="5">Часы ↑</option>
+            <option value="6">Часы ↓</option>
+            <option value="7">Имя ↑</option>
+            <option value="8">Имя ↓</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Режим интерфейса (UI)</label>
+          <select id="ab-uimode">
+            <option value="0">VGUI</option>
+            <option value="1">Big Picture</option>
+            <option value="2">None</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div>
+          <label class="field-label">Устройство</label>
+          <select id="ab-device">
+            <option value="1">ПК</option>
+            <option value="2">Big Picture</option>
+            <option value="3">VR</option>
+            <option value="4">Steam Deck</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Период проверки обменов (мин)</label>
+          <input id="ab-tradecheck" type="number" min="0" max="255" value="60">
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div>
+          <label class="field-label">Период отправки обменов (дней)</label>
+          <input id="ab-sendtrade" type="number" min="0" max="255" value="0">
+        </div>
+        <div>
+          <label class="field-label">Steam Trade Token</label>
+          <input id="ab-tradetoken" placeholder="напр. AbCdEf" autocomplete="off">
+        </div>
+      </div>
+
+      <label class="field-label">Имя компьютера (MachineName)</label>
+      <input id="ab-machine" placeholder="оставьте пустым для авто" autocomplete="off">
+
+      <label class="field-label">Игра при фарме (CustomGamePlayedWhileFarming)</label>
+      <input id="ab-custfarm" placeholder="название или пусто" autocomplete="off">
+
+      <label class="field-label">Игра в простое (CustomGamePlayedWhileIdle)</label>
+      <input id="ab-custidle" placeholder="название или пусто" autocomplete="off">
+
+      <label class="field-label">Игры в простое (AppID через запятую)</label>
+      <input id="ab-idlegames" placeholder="напр. 730,440" autocomplete="off">
+
+      <label class="field-label">Родительский код Steam</label>
+      <input id="ab-parental" placeholder="оставьте пустым, если нет" autocomplete="off">
+
+      <div class="field-grid">
+        <label class="checkbox-row"><input id="ab-loginkeys" type="checkbox" checked><span>Запоминать вход (UseLoginKeys)</span></label>
+      </div>
+    </div>
+
+    <div class="modal-actions modal-actions--split">
+      <button class="btn danger" id="ab-delete" style="display:none">Удалить бота</button>
+      <span style="flex:1"></span>
+      <button class="btn ghost" id="ab-cancel">Отмена</button>
+      <button class="btn primary" id="ab-save">Создать</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="guard-modal">
+  <div class="modal">
+    <h2 id="guard-title">Подтверждение входа</h2>
+    <p class="modal-sub" id="guard-sub">Введите код для аккаунта.</p>
+    <div class="guard-acc" id="guard-acc"></div>
+
+    <div id="guard-confirm-view">
+      <div class="guard-wait">
+        <div class="guard-phone">
+          <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/><path d="M9.5 8.5l1.8 1.8 3.2-3.6"/></svg>
+        </div>
+        <p class="guard-wait-text">Подтвердите вход в приложении<br>Steam на телефоне.</p>
+        <div class="guard-dots"><span></span><span></span><span></span></div>
+      </div>
+    </div>
+
+    <div id="guard-code-view" style="display:none">
+      <input id="guard-input" placeholder="Код" autocomplete="off" autocapitalize="characters">
+    </div>
+
+    <div class="modal-actions modal-actions--split">
+      <button class="btn ghost" id="guard-cancel">Позже</button>
+      <span style="flex:1"></span>
+      <button class="btn ghost" id="guard-bycode">Войти по коду</button>
+      <button class="btn primary" id="guard-send" style="display:none">Подтвердить</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="apikey-modal">
+  <div class="modal">
+    <h2>Steam Web API ключ</h2>
+    <p class="modal-sub">Для подбора игр по количеству часов нужен бесплатный Steam Web API ключ. Получите его на
+      <b>steamcommunity.com/dev/apikey</b> (в поле домена впишите любое, напр. <b>localhost</b>). Ключ хранится локально.</p>
+    <input id="apikey-input" placeholder="Вставьте API ключ" autocomplete="off">
+    <div class="modal-actions">
+      <button class="btn ghost" id="apikey-cancel">Отмена</button>
+      <button class="btn primary" id="apikey-save">Сохранить и запустить</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="auth-modal">
+  <div class="modal">
+    <h2>Пароль IPC</h2>
+    <p class="modal-sub">ASF защищён паролем (IPCPassword). Введите его, чтобы подключиться.</p>
+    <input id="auth-input" type="password" placeholder="IPCPassword">
+    <div class="modal-actions">
+      <button class="btn primary" id="auth-save">Подключиться</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

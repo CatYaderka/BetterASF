@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASF Desktop — превью интерфейса (демо-данные)</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<script>
+// Мокаем fetch, чтобы интерфейс показал демо-данные без запущенного ASF.
+window.ASF_CONFIG = { apiBase: "", password: "", theme: "dark" };
+const MOCK = {
+  "/Api/Bot/ASF": { Result: {
+    "Main": { KeepRunning:true, IsConnectedAndLoggedOn:true, Nickname:"Main♥", RequiredInput:0, s_SteamID:"76561198000000001",
+      AvatarHash:"", BotConfig:{ Enabled:true, SteamLogin:"main_user", SteamMasterClanID:"103582791475681171", FarmingPreferences:0, SteamTradeMatcher:true },
+      CardsFarmer:{ NowFarming:true, Paused:false } },
+    "Alt1": { KeepRunning:true, IsConnectedAndLoggedOn:true, Nickname:"Alt One", RequiredInput:0,
+      AvatarHash:"", CardsFarmer:{ NowFarming:false, Paused:true } },
+    "Alt2": { KeepRunning:true, IsConnectedAndLoggedOn:false, Nickname:"Alt Two", RequiredInput:0,
+      AvatarHash:"", CardsFarmer:{} },
+    "GuardBot": { KeepRunning:true, IsConnectedAndLoggedOn:false, Nickname:"GuardBot", RequiredInput:7,
+      AvatarHash:"", CardsFarmer:{} }
+  }, Success:true },
+  "/Api/ASF": { Result: { MemoryUsage: 71680, Version:{Major:6,Minor:1,Build:2},
+    ProcessStartTime: new Date(Date.now()-1000*60*874).toISOString() }, Success:true }
+};
+const _fetch = window.fetch;
+window.fetch = async (url, opts={}) => {
+  const path = String(url).replace(/^https?:\/\/[^/]+/, "");
+  if (MOCK[path]) return { ok:true, status:200, json: async()=>MOCK[path] };
+  if (path.startsWith("/Api/Command")) {
+    const body = opts.body ? JSON.parse(opts.body) : {};
+    return { ok:true, status:200, json: async()=>({ Result:`(демо) Выполнено: ${body.Command||""}\nOK`, Success:true }) };
+  }
+  if (path.startsWith("/Api/Plugins")) return { ok:true, status:200, json: async()=>({Result:[{Name:"ItemsMatcher",Version:{Major:6,Minor:1,Build:2}},{Name:"MobileAuthenticator",Version:{Major:6,Minor:1,Build:2}}],Success:true}) };
+  if (path.startsWith("/Api/Bot/")) return { ok:true, status:200, json: async()=>({Result:{x:true},Success:true}) };
+  if (path.startsWith("/__games")) return { ok:true, status:200, json: async()=>({games:[{appID:440,hours:2000},{appID:730,hours:1234}]}) };
+  if (path.startsWith("/__health")) return { ok:true, status:200, json: async()=>({proxy:"ok",hosts:{}}) };
+  return { ok:false, status:404, json: async()=>({Message:"mock 404"}) };
+};
+</script>
+<script>
+// Вставим разметку из index.html инлайном через fetch исходного файла:
+fetch('index.html').then(r=>r.text()).then(html=>{
+  const m = html.match(/<body>([\s\S]*?)<script src="app.js"/);
+  if (m){ document.body.insertAdjacentHTML('afterbegin', m[1]); }
+  const s=document.createElement('script'); s.src='app.js'; document.body.appendChild(s);
+});
+</script>
+</body>
+</html>

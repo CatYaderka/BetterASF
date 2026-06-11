@@ -1,0 +1,11 @@
+СЮДА положите содержимое ArchiSteamFarm (чтобы вшить его в .exe).
+
+Как:
+  1. Скачайте ASF под вашу систему (например ASF-win-x64.zip):
+     https://github.com/JustArchiNET/ArchiSteamFarm/releases
+  2. Распакуйте архив и СКОПИРУЙТЕ ВСЁ его содержимое в эту папку _asf,
+     чтобы здесь появился файл:  _asf\ArchiSteamFarm.exe
+  3. Запустите build_exe.bat — ASF будет вшит в BetterASF.exe.
+
+Если эту папку оставить пустой — ASF не будет вшит,
+и тогда ArchiSteamFarm.exe должен лежать рядом с BetterASF.exe.

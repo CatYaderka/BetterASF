@@ -1,0 +1,5 @@
+# ASF Desktop — зависимости Python
+# Нативное окно без браузера. На Windows использует встроенный Edge WebView2.
+pywebview>=5.0
+# На Windows pywebview подтянет cef/edgechromium backend через pythonnet:
+pythonnet>=3.0 ; sys_platform == "win32"
