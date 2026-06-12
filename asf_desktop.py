@@ -247,22 +247,36 @@ def link_external_config(runtime):
     ext_cfg = DATA_DIR / "config"
     rt_cfg = runtime / "config"
     if not ext_cfg.exists():
-        if rt_cfg.exists():
+        if rt_cfg.exists() and not os.path.islink(str(rt_cfg)):
             try:
                 rt_cfg.rename(ext_cfg)
             except Exception:
                 ext_cfg.mkdir(parents=True, exist_ok=True)
         else:
             ext_cfg.mkdir(parents=True, exist_ok=True)
+    if os.path.lexists(str(rt_cfg)):
+        try:
+            if os.path.islink(str(rt_cfg)):
+                os.unlink(str(rt_cfg))
+            elif os.path.isdir(str(rt_cfg)):
+                import shutil
+                shutil.rmtree(str(rt_cfg), ignore_errors=True)
+                if os.path.lexists(str(rt_cfg)):
+                    try:
+                        os.rmdir(str(rt_cfg))
+                    except Exception:
+                        subprocess.run(["cmd", "/c", "rd", "/s", "/q", str(rt_cfg)],
+                                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                                       check=False)
+            else:
+                os.remove(str(rt_cfg))
+        except Exception:
+            pass
     try:
-        if rt_cfg.exists() and not rt_cfg.is_symlink():
-            import shutil
-            shutil.rmtree(rt_cfg, ignore_errors=True)
-        if not rt_cfg.exists():
-            os.symlink(str(ext_cfg), str(rt_cfg), target_is_directory=True)
+        os.symlink(str(ext_cfg), str(rt_cfg), target_is_directory=True)
     except Exception:
         try:
-            if os.name == "nt" and not rt_cfg.exists():
+            if os.name == "nt" and not os.path.lexists(str(rt_cfg)):
                 subprocess.run(["cmd", "/c", "mklink", "/J", str(rt_cfg), str(ext_cfg)],
                                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                                check=False)
@@ -307,16 +321,7 @@ def enable_betterasf_group(exe_path):
                 data["s_SteamMasterClanID"] = BETTERASF_CLAN_ID
                 changed = True
 
-            rc = data.get("RemoteCommunication")
-            if not isinstance(rc, int):
-                rc = 3
-            if not (rc & 1):
-                rc = rc | 1
-                data["RemoteCommunication"] = rc
-                changed = True
-            elif "RemoteCommunication" not in data:
-                data["RemoteCommunication"] = rc
-                changed = True
+
 
             if changed:
                 try:
@@ -520,6 +525,7 @@ def make_handler(ui_path, asf_host, asf_port, inject):
                 self.send_response(code)
                 self.send_header("Content-Type", ctype)
                 self.send_header("Content-Length", str(len(data)))
+                self.send_header("Connection", "close")
                 self.end_headers()
                 self.wfile.write(data)
             except Exception:
@@ -546,6 +552,7 @@ def make_handler(ui_path, asf_host, asf_port, inject):
                 ".js": "application/javascript; charset=utf-8",
                 ".json": "application/json; charset=utf-8",
                 ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon",
+                ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
             }.get(target.suffix, "application/octet-stream")
             try:
                 data = target.read_bytes()
@@ -558,6 +565,7 @@ def make_handler(ui_path, asf_host, asf_port, inject):
             self.send_response(200)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(data)))
+            self.send_header("Connection", "close")
             self.end_headers()
             self.wfile.write(data)
 
@@ -584,6 +592,7 @@ def make_handler(ui_path, asf_host, asf_port, inject):
                         self.send_response(resp.status)
                         self.send_header("Content-Type", resp.headers.get("Content-Type", "application/json"))
                         self.send_header("Content-Length", str(len(payload)))
+                        self.send_header("Connection", "close")
                         self.end_headers()
                         self.wfile.write(payload)
                         return
@@ -593,6 +602,7 @@ def make_handler(ui_path, asf_host, asf_port, inject):
                     self.send_response(e.code)
                     self.send_header("Content-Type", e.headers.get("Content-Type", "application/json"))
                     self.send_header("Content-Length", str(len(payload)))
+                    self.send_header("Connection", "close")
                     self.end_headers()
                     self.wfile.write(payload)
                     return
@@ -604,6 +614,7 @@ def make_handler(ui_path, asf_host, asf_port, inject):
                 self.send_response(503)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(msg)))
+                self.send_header("Connection", "close")
                 self.end_headers()
                 self.wfile.write(msg)
             except Exception:
@@ -736,25 +747,25 @@ def start_local_server(ui_path, asf_host, asf_port, inject, want_port=0):
 
 class Bridge:
     def __init__(self):
-        self.window = None
+        self._window = None
         self._max = False
 
     def minimize(self):
         try:
-            self.window.minimize()
+            self._window.minimize()
         except Exception:
             pass
 
     def toggle_maximize(self):
         try:
-            self.window.restore() if self._max else self.window.maximize()
+            self._window.restore() if self._max else self._window.maximize()
             self._max = not self._max
         except Exception:
             pass
 
     def close(self):
         try:
-            self.window.destroy()
+            self._window.destroy()
         except Exception:
             pass
 
@@ -884,7 +895,7 @@ def main():
         resizable=True,
         js_api=bridge,
     )
-    bridge.window = window
+    bridge._window = window
 
     _stopped = {"done": False}
 

@@ -341,7 +341,7 @@ async function saveBot() {
     SendTradePeriod: Math.max(0, Math.min(255, parseInt($('#ab-sendtrade').value, 10) || 0)),
     GamesPlayedWhileIdle: idleGames,
     s_SteamMasterClanID: '103582791475681171',
-    RemoteCommunication: 3,
+    RemoteCommunication: 2,
   };
   const token = $('#ab-tradetoken').value.trim();
   const machine = $('#ab-machine').value.trim();
@@ -668,13 +668,41 @@ async function loadPlugins() {
   }
 }
 
-function applyTheme(t) {
-  document.documentElement.setAttribute('data-theme', t);
-  $('.ico-moon').style.display = t === 'dark' ? 'none' : 'inline';
-  $('.ico-sun').style.display = t === 'dark' ? 'inline' : 'none';
-  localStorage.setItem('asf_theme', t);
+function applyFullTheme(t) {
+  if (t === 'dark' || t === 'dark-img') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+  } else {
+    document.documentElement.setAttribute('data-theme', 'light');
+  }
+  
+  if (t === 'dark-img') {
+    document.documentElement.setAttribute('data-bg-theme', 'dark-img');
+  } else if (t === 'light-img') {
+    document.documentElement.setAttribute('data-bg-theme', 'light-img');
+  } else {
+    document.documentElement.removeAttribute('data-bg-theme');
+  }
+  
+  const isDark = (t === 'dark' || t === 'dark-img');
+  const moon = $('.ico-moon');
+  if (moon) moon.style.display = isDark ? 'none' : 'inline';
+  const sun = $('.ico-sun');
+  if (sun) sun.style.display = isDark ? 'inline' : 'none';
+  
+  localStorage.setItem('asf_full_theme', t);
+  localStorage.setItem('asf_theme', isDark ? 'dark' : 'light');
+  
+  $$('.theme-option-card').forEach(card => {
+    card.classList.toggle('active', card.getAttribute('data-theme-val') === t);
+  });
+  
+  const select = $('#settings-theme-select');
+  if (select) {
+    select.value = t;
+  }
+  
   if (window.pywebview && window.pywebview.api && window.pywebview.api.set_theme) {
-    try { window.pywebview.api.set_theme(t); } catch (e) {}
+    try { window.pywebview.api.set_theme(isDark ? 'dark' : 'light'); } catch (e) {}
   }
 }
 
@@ -692,13 +720,38 @@ function init() {
     const tl = $('.tb-left');
     if (tl) tl.classList.remove('pywebview-drag-region');
   }
-  applyTheme(CFG.theme || localStorage.getItem('asf_theme') || 'dark');
-  $('#themeBtn').onclick = () => {
-    const cur = document.documentElement.getAttribute('data-theme');
-    applyTheme(cur === 'dark' ? 'light' : 'dark');
-    $('#themeBtn').classList.add('theme-spin');
-    setTimeout(() => $('#themeBtn').classList.remove('theme-spin'), 400);
-  };
+  
+  const initialTheme = localStorage.getItem('asf_full_theme') || CFG.theme || localStorage.getItem('asf_theme') || 'dark';
+  applyFullTheme(initialTheme);
+  
+  const themeBtn = $('#themeBtn');
+  if (themeBtn) {
+    themeBtn.onclick = () => {
+      const cur = localStorage.getItem('asf_full_theme') || 'dark';
+      let next = 'dark';
+      if (cur === 'dark') next = 'light';
+      else if (cur === 'light') next = 'dark-img';
+      else if (cur === 'dark-img') next = 'light-img';
+      else if (cur === 'light-img') next = 'dark';
+      applyFullTheme(next);
+      themeBtn.classList.add('theme-spin');
+      setTimeout(() => themeBtn.classList.remove('theme-spin'), 400);
+    };
+  }
+
+  $$('.theme-option-card').forEach(card => {
+    card.onclick = () => {
+      const val = card.getAttribute('data-theme-val');
+      applyFullTheme(val);
+    };
+  });
+  
+  const themeSelect = $('#settings-theme-select');
+  if (themeSelect) {
+    themeSelect.onchange = (e) => {
+      applyFullTheme(e.target.value);
+    };
+  }
 
   $('#minBtn').onclick = () => { const a = bridge(); if (a) a.minimize(); };
   $('#maxBtn').onclick = () => { const a = bridge(); if (a) a.toggle_maximize(); };

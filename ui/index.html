@@ -51,6 +51,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/></svg>
         <span>Журнал</span>
       </a>
+      <a class="nav-link" data-view="settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>Настройки</span>
+      </a>
     </div>
 
     <div class="nav-group nav-group--bottom">
@@ -144,6 +148,58 @@
       <pre class="cmd-output log-output" id="log-output">Журнал событий интерфейса…
 </pre>
       <div class="made-by">Made with &lt;3 by CatYaderka</div>
+    </section>
+
+    <section class="view" id="view-settings">
+      <div class="view-head"><h1>Настройки</h1></div>
+      <div class="cmd-box settings-container">
+        <h2 class="settings-section-title">Оформление и темы</h2>
+        <p class="settings-sub">Выберите цветовую схему и фоновое изображение для интерфейса BetterASF.</p>
+        
+        <div class="theme-options">
+          <div class="theme-option-card" data-theme-val="dark" id="theme-card-dark">
+            <div class="theme-preview dark-preview">
+              <div class="preview-title">BetterASF</div>
+              <div class="preview-body">Тёмная</div>
+            </div>
+            <div class="theme-option-label">Тёмная тема (Стандартная)</div>
+          </div>
+          
+          <div class="theme-option-card" data-theme-val="light" id="theme-card-light">
+            <div class="theme-preview light-preview">
+              <div class="preview-title">BetterASF</div>
+              <div class="preview-body">Светлая</div>
+            </div>
+            <div class="theme-option-label">Светлая тема (Стандартная)</div>
+          </div>
+          
+          <div class="theme-option-card" data-theme-val="dark-img" id="theme-card-dark-img">
+            <div class="theme-preview dark-img-preview">
+              <div class="preview-title">BetterASF</div>
+              <div class="preview-body">Тёмная</div>
+            </div>
+            <div class="theme-option-label">Тёмная тема (Dead Dream)</div>
+          </div>
+          
+          <div class="theme-option-card" data-theme-val="light-img" id="theme-card-light-img">
+            <div class="theme-preview light-img-preview">
+              <div class="preview-title">BetterASF</div>
+              <div class="preview-body">Светлая</div>
+            </div>
+            <div class="theme-option-label">Светлая тема (Dead Dream)</div>
+          </div>
+        </div>
+        
+        <div class="settings-row" style="margin-top: 24px; display: flex; align-items: center; gap: 12px;">
+          <label class="field-label" style="margin-bottom: 0;" for="settings-theme-select">Выбрать тему из списка:</label>
+          <select id="settings-theme-select" class="theme-select" style="padding: 8px 12px; border-radius: var(--r-sm); background: var(--surface-2); color: var(--text); border: 1px solid var(--border); outline: none; cursor: pointer;">
+            <option value="dark">Тёмная тема (Стандартная)</option>
+            <option value="light">Светлая тема (Стандартная)</option>
+            <option value="dark-img">Тёмная тема (Dead Dream)</option>
+            <option value="light-img">Светлая тема (Dead Dream)</option>
+          </select>
+        </div>
+      </div>
     </section>
 
   </main>

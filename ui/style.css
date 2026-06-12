@@ -227,3 +227,144 @@ input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--g
 .plugin-ver{color:var(--dim);font-size:13px;margin-top:4px}
 .plugin-badge{font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border);color:var(--dim)}
 .made-by{text-align:center;color:var(--faint);opacity:.45;font-size:12px;margin-top:16px;padding-bottom:6px;user-select:none}
+
+/* Background themes using the JPEG files */
+[data-bg-theme="dark-img"] body {
+  background-image: linear-gradient(rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.55)), url('bg_dark.jpg') !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  background-attachment: fixed !important;
+}
+[data-bg-theme="dark-img"] {
+  --bg: transparent;
+  --surface: rgba(19, 19, 22, 0.75);
+  --surface-2: rgba(27, 27, 32, 0.85);
+  --surface-hover: rgba(35, 35, 41, 0.9);
+  --border: rgba(255, 255, 255, 0.08);
+}
+[data-bg-theme="dark-img"] #titlebar {
+  background: rgba(0, 0, 0, 0.6) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+[data-bg-theme="dark-img"] .sidebar {
+  background: rgba(19, 19, 22, 0.45) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+[data-bg-theme="light-img"] body {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.45)), url('bg_light.jpg') !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  background-attachment: fixed !important;
+}
+[data-bg-theme="light-img"] {
+  --bg: transparent;
+  --surface: rgba(255, 255, 255, 0.75);
+  --surface-2: rgba(242, 242, 245, 0.85);
+  --surface-hover: rgba(233, 233, 238, 0.9);
+  --border: rgba(0, 0, 0, 0.08);
+}
+[data-bg-theme="light-img"] #titlebar {
+  background: rgba(245, 245, 247, 0.6) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+[data-bg-theme="light-img"] .sidebar {
+  background: rgba(245, 245, 247, 0.45) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Settings Styles */
+.settings-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.settings-section-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.settings-sub {
+  color: var(--dim);
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+.theme-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.theme-option-card {
+  background: var(--surface-2);
+  border: 2px solid var(--border);
+  border-radius: var(--r);
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  user-select: none;
+}
+.theme-option-card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+}
+.theme-option-card.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 12px var(--glow);
+}
+.theme-preview {
+  height: 90px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 8px;
+  font-size: 10px;
+  overflow: hidden;
+  position: relative;
+}
+.preview-title {
+  font-weight: 700;
+}
+.preview-body {
+  font-size: 8px;
+  color: var(--dim);
+}
+
+/* Specific Preview Backgrounds */
+.dark-preview {
+  background: #000;
+  color: #fff;
+}
+.light-preview {
+  background: #f5f5f7;
+  color: #000;
+}
+.dark-img-preview {
+  background: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url('bg_dark.jpg');
+  background-size: cover;
+  background-position: center;
+  color: #fff;
+}
+.light-img-preview {
+  background: linear-gradient(rgba(255,255,255,0.4), rgba(255,255,255,0.4)), url('bg_light.jpg');
+  background-size: cover;
+  background-position: center;
+  color: #000;
+}
+
+.theme-option-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+}
