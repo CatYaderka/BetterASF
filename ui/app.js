@@ -149,17 +149,72 @@ function renderBots(bots) {
   $('#st-offline').textContent = offline;
   $('#st-total').textContent = names.length;
 
-  let games = 0, cards = 0, timeMin = 0, hasData = false;
+  let games = 0, cards = 0, totalSeconds = 0, hasData = false;
   for (const n of names) {
     const cf = bots[n].CardsFarmer;
     if (cf) {
-      if (Array.isArray(cf.GamesToFarm)) { games += cf.GamesToFarm.length; hasData = true; }
-      if (typeof cf.TimeRemaining === 'string') {  }
+      const countedAppIDs = new Set();
+      if (Array.isArray(cf.GamesToFarm)) { 
+        games += cf.GamesToFarm.length; 
+        hasData = true; 
+        for (const game of cf.GamesToFarm) {
+          if (game && typeof game.AppID === 'number') {
+            countedAppIDs.add(game.AppID);
+            if (typeof game.CardsRemaining === 'number') {
+              cards += game.CardsRemaining;
+            }
+          }
+        }
+      }
+      if (Array.isArray(cf.CurrentGamesFarming)) {
+        for (const game of cf.CurrentGamesFarming) {
+          if (game && typeof game.AppID === 'number' && !countedAppIDs.has(game.AppID)) {
+            countedAppIDs.add(game.AppID);
+            if (typeof game.CardsRemaining === 'number') {
+              cards += game.CardsRemaining;
+            }
+          }
+        }
+      }
+      if (typeof cf.TimeRemaining === 'string') {
+        const parts = cf.TimeRemaining.split(':');
+        if (parts.length >= 2) {
+          let hrs = 0, mins = 0, secs = 0, days = 0;
+          let hourPart = parts[0];
+          if (hourPart.includes('.')) {
+            const dayParts = hourPart.split('.');
+            days = parseInt(dayParts[0], 10) || 0;
+            hrs = parseInt(dayParts[1], 10) || 0;
+          } else {
+            hrs = parseInt(hourPart, 10) || 0;
+          }
+          mins = parseInt(parts[1], 10) || 0;
+          if (parts.length >= 3) {
+            secs = parseInt(parts[2], 10) || 0;
+          }
+          totalSeconds += (days * 86400) + (hrs * 3600) + (mins * 60) + secs;
+        }
+      }
     }
   }
+  
+  let timeStr = '—';
+  if (hasData && totalSeconds > 0) {
+    const d = Math.floor(totalSeconds / 86400);
+    const h = Math.floor((totalSeconds % 86400) / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    if (d > 0) {
+      timeStr = `${d}д ${h}ч`;
+    } else if (h > 0) {
+      timeStr = `${h}ч ${m}м`;
+    } else {
+      timeStr = `${m}м`;
+    }
+  }
+
   $('#kpi-games').textContent = hasData ? games : '—';
-  $('#kpi-cards').textContent = '—';
-  $('#kpi-time').textContent = '—';
+  $('#kpi-cards').textContent = hasData ? cards : '—';
+  $('#kpi-time').textContent = timeStr;
 
   const cardsHtml = names.length
     ? names.map(n => botCardHTML(n, bots[n])).join('')
