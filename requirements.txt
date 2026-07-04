@@ -1,5 +1,8 @@
-# ASF Desktop — зависимости Python
-# Нативное окно без браузера. На Windows использует встроенный Edge WebView2.
+# Python dependencies for BetterASF.
+# On Windows, the UI uses Edge WebView2 through pywebview.
 pywebview>=5.0
-# На Windows pywebview подтянет cef/edgechromium backend через pythonnet:
+# pythonnet is required by the Windows edgechromium backend.
 pythonnet>=3.0 ; sys_platform == "win32"
+# System tray icon support.
+pystray>=0.19.5 ; sys_platform == "win32"
+Pillow>=10.0 ; sys_platform == "win32"

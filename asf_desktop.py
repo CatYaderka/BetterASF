@@ -12,10 +12,15 @@ import urllib.request
 import urllib.error
 from pathlib import Path
 
-import webview
+try:
+    import webview
+except Exception:
+    webview = None
 
 HERE = Path(__file__).resolve().parent
 APP_NAME = "BetterASF"
+APP_VERSION = "2.0"
+GITHUB_REPO = "CatYaderka/BetterASF"
 
 _LOG_PATH = None
 RUNTIME = {"steam_api_key": ""}
@@ -104,10 +109,23 @@ DEFAULTS = {
     "window_width": "1200",
     "window_height": "800",
     "start_asf": "true",
-    "startup_timeout": "60",
+    "self_install_to_program_files": "true",
+    "create_shortcuts": "true",
+    "startup_timeout": "180",
     "theme": "dark",
     "frameless": "true",
     "ui_port": "0",
+    "ui_mode": "webview",
+    "browser_path": "",
+    "webview_low_memory": "true",
+    "webview_aggressive": "true",
+    "webview_single_process": "true",
+    "webview_disable_gpu": "false",
+    "webview_in_process_gpu": "false",
+    "memory_trim": "true",
+    "memory_trim_interval": "30",
+    "memory_include_orphan_webview2": "true",
+    "webview_extra_args": "",
     "steam_api_key": "",
 }
 
@@ -169,6 +187,196 @@ def save_theme(theme):
 
 def save_api_key(key):
     _save_settings({"steam_api_key": key or ""})
+
+
+def get_app_setting(key, default=None):
+    return _load_settings().get(key, default)
+
+
+def set_app_setting(key, value):
+    _save_settings({key: value})
+
+
+def _autostart_command():
+    if is_frozen():
+        return f'"{sys.executable}"'
+    return f'"{sys.executable}" "{Path(__file__).resolve()}"'
+
+
+def set_autostart_enabled(enabled):
+    enabled = bool(enabled)
+    set_app_setting("autostart", enabled)
+    if os.name != "nt":
+        # The setting is saved everywhere, but real autostart is configured only on Windows builds.
+        return True
+    try:
+        import winreg
+        key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE) as k:
+            if enabled:
+                winreg.SetValueEx(k, APP_NAME, 0, winreg.REG_SZ, _autostart_command())
+            else:
+                try:
+                    winreg.DeleteValue(k, APP_NAME)
+                except FileNotFoundError:
+                    pass
+        return True
+    except Exception as e:
+        log(f"Не удалось изменить автозапуск: {e}")
+        return False
+
+
+def _is_under_path(path, parent):
+    try:
+        Path(path).resolve().relative_to(Path(parent).resolve())
+        return True
+    except Exception:
+        return False
+
+
+def _ps_quote(value):
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+def ensure_user_shortcuts(cfg):
+    """Create per-user Desktop and Start Menu shortcuts for the current executable."""
+    enabled = str(cfg.get("create_shortcuts", "true")).lower() in ("1", "true", "yes", "on")
+    if not enabled or os.name != "nt" or not is_frozen():
+        return
+    try:
+        import base64
+        target = str(Path(sys.executable).resolve())
+        workdir = str(Path(sys.executable).resolve().parent)
+        icon = target
+        ps = f"""
+$ErrorActionPreference = 'SilentlyContinue'
+$target = {_ps_quote(target)}
+$workdir = {_ps_quote(workdir)}
+$icon = {_ps_quote(icon)}
+$desktop = [Environment]::GetFolderPath('DesktopDirectory')
+$programs = [Environment]::GetFolderPath('Programs')
+$startDir = Join-Path $programs 'BetterASF'
+New-Item -ItemType Directory -Force -Path $startDir | Out-Null
+$links = @(
+    (Join-Path $desktop 'BetterASF.lnk'),
+    (Join-Path $startDir 'BetterASF.lnk')
+)
+$ws = New-Object -ComObject WScript.Shell
+foreach ($lnk in $links) {{
+    $need = $true
+    if (Test-Path -LiteralPath $lnk) {{
+        try {{
+            $existing = $ws.CreateShortcut($lnk)
+            if ($existing.TargetPath -eq $target) {{ $need = $false }}
+        }} catch {{}}
+    }}
+    if ($need) {{
+        $sc = $ws.CreateShortcut($lnk)
+        $sc.TargetPath = $target
+        $sc.WorkingDirectory = $workdir
+        $sc.IconLocation = $icon
+        $sc.Description = 'BetterASF'
+        $sc.Save()
+    }}
+}}
+"""
+        encoded = base64.b64encode(ps.encode("utf-16le")).decode("ascii")
+        subprocess.Popen(
+            ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-EncodedCommand", encoded],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        log("Shortcuts: Desktop and Start Menu check requested.")
+    except Exception as e:
+        log(f"Shortcuts error: {e}")
+
+
+def ensure_program_files_install(cfg):
+    """For one-file Windows builds: copy BetterASF.exe to Program Files and relaunch it."""
+    enabled = str(cfg.get("self_install_to_program_files", "true")).lower() in ("1", "true", "yes", "on")
+    if not enabled or os.name != "nt" or not is_frozen():
+        return False
+    if os.environ.get("BETTERASF_NO_SELF_INSTALL") == "1":
+        return False
+
+    src = Path(sys.executable).resolve()
+    pf = os.environ.get("ProgramFiles") or os.environ.get("PROGRAMFILES")
+    if not pf:
+        log("Self-install: ProgramFiles environment variable is missing.")
+        return False
+    install_dir = Path(pf) / APP_NAME
+    dst = install_dir / f"{APP_NAME}.exe"
+
+    if _is_under_path(src, install_dir):
+        return False
+
+    try:
+        import base64
+        install_log = DATA_DIR / "self-install.log"
+        ps = f"""
+$ErrorActionPreference = 'Stop'
+$src = {_ps_quote(src)}
+$dstDir = {_ps_quote(install_dir)}
+$dst = {_ps_quote(dst)}
+$oldPid = {os.getpid()}
+$log = {_ps_quote(install_log)}
+function Log($m) {{
+    try {{
+        $dir = Split-Path -Parent $log
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+        Add-Content -LiteralPath $log -Encoding UTF8 -Value ((Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + ' ' + $m)
+    }} catch {{}}
+}}
+try {{
+    Log 'Self-install started.'
+    Log ('Source: ' + $src)
+    Log ('Target: ' + $dst)
+    New-Item -ItemType Directory -Force -Path $dstDir | Out-Null
+
+    try {{
+        Copy-Item -LiteralPath $src -Destination $dst -Force
+        Log 'Copy succeeded.'
+    }} catch {{
+        Log ('Copy failed: ' + $_.Exception.Message)
+        if (Test-Path -LiteralPath $dst) {{
+            Log 'Existing installed copy found, starting it.'
+            Start-Process -FilePath $dst -WorkingDirectory $dstDir
+            exit 0
+        }}
+        throw
+    }}
+
+    try {{ Unblock-File -LiteralPath $dst -ErrorAction SilentlyContinue }} catch {{}}
+
+    $env:BETTERASF_NO_SELF_INSTALL = '1'
+    Start-Process -FilePath $dst -WorkingDirectory $dstDir
+    Log 'Installed copy started.'
+
+    try {{ Wait-Process -Id $oldPid -Timeout 45 -ErrorAction SilentlyContinue }} catch {{}}
+    Start-Sleep -Milliseconds 1000
+    try {{
+        if ((Test-Path -LiteralPath $src) -and ($src -ne $dst)) {{
+            Remove-Item -LiteralPath $src -Force -ErrorAction SilentlyContinue
+            Log 'Original file removal requested.'
+        }}
+    }} catch {{ Log ('Original removal failed: ' + $_.Exception.Message) }}
+}} catch {{
+    Log ('Fatal: ' + $_.Exception.Message)
+}}
+"""
+        encoded = base64.b64encode(ps.encode("utf-16le")).decode("ascii")
+        params = f'-NoProfile -ExecutionPolicy Bypass -EncodedCommand {encoded}'
+        import ctypes
+        rc = ctypes.windll.shell32.ShellExecuteW(None, "runas", "powershell.exe", params, None, 1)
+        if int(rc) <= 32:
+            log(f"Self-install: elevation was not started, ShellExecute={int(rc)}")
+            return False
+        log(f"Self-install: elevated copy task started. Target: {dst}")
+        log(f"Self-install: details will be written to {install_log}")
+        return True
+    except Exception as e:
+        log(f"Self-install error: {e}")
+        return False
 
 
 def find_asf_executable(configured):
@@ -421,7 +629,10 @@ class ASFProcess:
         self.job = None
 
     def start(self):
-        cmd = [self.exe, "--SERVICE", "--NO-RESTART"] + list(self.extra_args)
+        # Important: do not pass --NO-RESTART. During self-update ASF terminates
+        # the current process and starts a new one; with --NO-RESTART BetterASF would see
+        # only a dead PID and keep showing no connection.
+        cmd = [self.exe, "--SERVICE"] + list(self.extra_args)
         flags = 0
         if os.name == "nt":
             flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -451,6 +662,18 @@ class ASFProcess:
 
     def alive(self):
         return self.proc is not None and self.proc.poll() is None
+
+    def restart(self):
+        old_pid = self.proc.pid if self.proc else None
+        log(f"Перезапуск ASF после раннего завершения" + (f" (старый PID {old_pid})" if old_pid else "") + "...")
+        try:
+            if self.proc and self.proc.poll() is None:
+                self.stop()
+        except Exception:
+            pass
+        self._close_job()
+        self.proc = None
+        self.start()
 
     def stop(self):
         if not self.proc:
@@ -498,6 +721,236 @@ class ASFProcess:
             self.job = None
 
 
+def _process_memory_bytes(pid):
+    """Возвращает рабочий набор процесса в байтах без внешних зависимостей."""
+    try:
+        pid = int(pid)
+    except Exception:
+        return 0
+    if os.name == "nt":
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+            PROCESS_VM_READ = 0x0010
+
+            class PROCESS_MEMORY_COUNTERS(ctypes.Structure):
+                _fields_ = [
+                    ("cb", wintypes.DWORD),
+                    ("PageFaultCount", wintypes.DWORD),
+                    ("PeakWorkingSetSize", ctypes.c_size_t),
+                    ("WorkingSetSize", ctypes.c_size_t),
+                    ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                    ("PagefileUsage", ctypes.c_size_t),
+                    ("PeakPagefileUsage", ctypes.c_size_t),
+                ]
+
+            kernel32 = ctypes.windll.kernel32
+            psapi = ctypes.windll.psapi
+            kernel32.OpenProcess.restype = wintypes.HANDLE
+            kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+            psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+            handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ, False, pid)
+            if not handle:
+                return 0
+            try:
+                counters = PROCESS_MEMORY_COUNTERS()
+                counters.cb = ctypes.sizeof(counters)
+                if psapi.GetProcessMemoryInfo(handle, ctypes.byref(counters), counters.cb):
+                    return int(counters.WorkingSetSize)
+            finally:
+                kernel32.CloseHandle(handle)
+        except Exception:
+            return 0
+    else:
+        try:
+            with open(f"/proc/{pid}/statm", "r", encoding="utf-8") as f:
+                parts = f.read().split()
+            if len(parts) >= 2:
+                return int(parts[1]) * os.sysconf("SC_PAGE_SIZE")
+        except Exception:
+            pass
+    return 0
+
+
+def _child_process_map():
+    """Карта parent_pid -> [child_pid] для подсчёта памяти WebView/дочерних процессов."""
+    mp = {}
+    if os.name == "nt":
+        try:
+            import ctypes
+            from ctypes import wintypes
+            TH32CS_SNAPPROCESS = 0x00000002
+            INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+
+            class PROCESSENTRY32W(ctypes.Structure):
+                _fields_ = [
+                    ("dwSize", wintypes.DWORD), ("cntUsage", wintypes.DWORD),
+                    ("th32ProcessID", wintypes.DWORD), ("th32DefaultHeapID", ctypes.c_void_p),
+                    ("th32ModuleID", wintypes.DWORD), ("cntThreads", wintypes.DWORD),
+                    ("th32ParentProcessID", wintypes.DWORD), ("pcPriClassBase", ctypes.c_long),
+                    ("dwFlags", wintypes.DWORD), ("szExeFile", wintypes.WCHAR * 260),
+                ]
+
+            k32 = ctypes.windll.kernel32
+            k32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+            k32.CloseHandle.argtypes = [wintypes.HANDLE]
+            snap = k32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+            if snap == INVALID_HANDLE_VALUE:
+                return mp
+            try:
+                pe = PROCESSENTRY32W()
+                pe.dwSize = ctypes.sizeof(pe)
+                ok = k32.Process32FirstW(snap, ctypes.byref(pe))
+                while ok:
+                    mp.setdefault(int(pe.th32ParentProcessID), []).append(int(pe.th32ProcessID))
+                    ok = k32.Process32NextW(snap, ctypes.byref(pe))
+            finally:
+                k32.CloseHandle(snap)
+        except Exception:
+            return mp
+    else:
+        try:
+            proc = Path("/proc")
+            for d in proc.iterdir():
+                if not d.name.isdigit():
+                    continue
+                try:
+                    text = (d / "stat").read_text(encoding="utf-8", errors="ignore")
+                    # pid (comm) state ppid ...; comm can contain spaces, so use the last closing parenthesis.
+                    rest = text[text.rfind(")") + 2:].split()
+                    ppid = int(rest[1])
+                    mp.setdefault(ppid, []).append(int(d.name))
+                except Exception:
+                    pass
+        except Exception:
+            pass
+    return mp
+
+
+def _process_name_map():
+    """Карта pid -> exe name. Нужна, потому что WebView2 иногда не висит дочерним процессом Python."""
+    names = {}
+    if os.name == "nt":
+        try:
+            import ctypes
+            from ctypes import wintypes
+            TH32CS_SNAPPROCESS = 0x00000002
+            INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+
+            class PROCESSENTRY32W(ctypes.Structure):
+                _fields_ = [
+                    ("dwSize", wintypes.DWORD), ("cntUsage", wintypes.DWORD),
+                    ("th32ProcessID", wintypes.DWORD), ("th32DefaultHeapID", ctypes.c_void_p),
+                    ("th32ModuleID", wintypes.DWORD), ("cntThreads", wintypes.DWORD),
+                    ("th32ParentProcessID", wintypes.DWORD), ("pcPriClassBase", ctypes.c_long),
+                    ("dwFlags", wintypes.DWORD), ("szExeFile", wintypes.WCHAR * 260),
+                ]
+
+            k32 = ctypes.windll.kernel32
+            k32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+            k32.CloseHandle.argtypes = [wintypes.HANDLE]
+            snap = k32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+            if snap == INVALID_HANDLE_VALUE:
+                return names
+            try:
+                pe = PROCESSENTRY32W()
+                pe.dwSize = ctypes.sizeof(pe)
+                ok = k32.Process32FirstW(snap, ctypes.byref(pe))
+                while ok:
+                    names[int(pe.th32ProcessID)] = str(pe.szExeFile or "").lower()
+                    ok = k32.Process32NextW(snap, ctypes.byref(pe))
+            finally:
+                k32.CloseHandle(snap)
+        except Exception:
+            return names
+    else:
+        try:
+            for d in Path("/proc").iterdir():
+                if not d.name.isdigit():
+                    continue
+                try:
+                    names[int(d.name)] = (d / "comm").read_text(encoding="utf-8", errors="ignore").strip().lower()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+    return names
+
+
+def _webview2_pids_for_stats(mp, name_map, descendants, include_orphans=True):
+    desc = set(descendants or [])
+    by_name = {pid for pid, nm in (name_map or {}).items() if nm == "msedgewebview2.exe" or nm == "msedgewebview2"}
+    child_webviews = by_name & desc
+    if child_webviews:
+        return child_webviews, False
+    # On some WebView2/COM runtimes msedgewebview2.exe processes are not Python children,
+    # while Task Manager still shows them as WebView2. For a realistic BetterASF value,
+    # include orphan WebView2 processes; disable this if other WebView2 apps are running.
+    return (by_name if include_orphans else set()), True if by_name and include_orphans else False
+
+
+def _descendants(root_pid, mp):
+    out = []
+    stack = list(mp.get(int(root_pid), []))
+    seen = set()
+    while stack:
+        pid = stack.pop()
+        if pid in seen:
+            continue
+        seen.add(pid)
+        out.append(pid)
+        stack.extend(mp.get(pid, []))
+    return out
+
+
+def app_memory_stats(asf_pid=None, exclude_pids=None, include_orphan_webview2=True):
+    self_pid = os.getpid()
+    mp = _child_process_map()
+    name_map = _process_name_map()
+    descendants = _descendants(self_pid, mp)
+    app_pids = [self_pid] + descendants
+
+    webview_pids, webview_orphan_mode = _webview2_pids_for_stats(mp, name_map, descendants, include_orphan_webview2)
+    app_pids = list(dict.fromkeys(app_pids + list(webview_pids)))
+
+    exclude = set()
+    if asf_pid:
+        try:
+            exclude.add(int(asf_pid))
+            exclude.update(_descendants(int(asf_pid), mp))
+        except Exception:
+            pass
+    for ep in (exclude_pids or []):
+        if ep:
+            try:
+                exclude.add(int(ep))
+                exclude.update(_descendants(int(ep), mp))
+            except Exception:
+                pass
+    app_pids = [p for p in app_pids if p not in exclude]
+    webview_pids = [p for p in webview_pids if p not in exclude]
+
+    app_bytes = sum(_process_memory_bytes(p) for p in app_pids)
+    webview_bytes = sum(_process_memory_bytes(p) for p in webview_pids)
+    self_bytes = _process_memory_bytes(self_pid)
+    return {
+        "pid": self_pid,
+        "pids": app_pids,
+        "memoryBytes": app_bytes,
+        "memoryKb": int(app_bytes / 1024),
+        "selfMemoryKb": int(self_bytes / 1024),
+        "webviewPids": list(webview_pids),
+        "webviewMemoryKb": int(webview_bytes / 1024),
+        "webviewOrphanMode": bool(webview_orphan_mode),
+        "asfPid": int(asf_pid) if asf_pid else None,
+    }
+
+
 def ipc_ready(host, port):
     hosts = [host]
     for h in ("127.0.0.1", "::1"):
@@ -512,7 +965,138 @@ def ipc_ready(host, port):
     return False
 
 
-def make_handler(ui_path, asf_host, asf_port, inject):
+def _normalize_version(v):
+    v = str(v or "").strip()
+    if v.lower().startswith("v"):
+        v = v[1:]
+    return v
+
+
+def _version_tuple(v):
+    parts = []
+    for x in _normalize_version(v).replace("-", ".").split("."):
+        try:
+            parts.append(int("".join(ch for ch in x if ch.isdigit()) or "0"))
+        except Exception:
+            parts.append(0)
+    while len(parts) < 3:
+        parts.append(0)
+    return tuple(parts[:4])
+
+
+def _local_git_commit():
+    try:
+        head = APP_DIR / ".git" / "HEAD"
+        if head.exists():
+            txt = head.read_text(encoding="utf-8", errors="ignore").strip()
+            if txt.startswith("ref:"):
+                ref = txt.split(" ", 1)[1].strip()
+                rp = APP_DIR / ".git" / ref
+                if rp.exists():
+                    return rp.read_text(encoding="utf-8", errors="ignore").strip()[:12]
+            return txt[:12]
+    except Exception:
+        pass
+    return ""
+
+
+def _best_release_asset(release):
+    assets = release.get("assets") or []
+    if not assets:
+        return release.get("zipball_url") or release.get("html_url")
+    preferred_ext = (".exe", ".msi", ".zip", ".7z")
+    for ext in preferred_ext:
+        for a in assets:
+            name = (a.get("name") or "").lower()
+            if name.endswith(ext) and a.get("browser_download_url"):
+                return a.get("browser_download_url")
+    for a in assets:
+        if a.get("browser_download_url"):
+            return a.get("browser_download_url")
+    return release.get("zipball_url") or release.get("html_url")
+
+
+def check_github_update():
+    """Проверяет релизы BetterASF на GitHub и отдаёт прямую ссылку на скачивание последней версии."""
+    result = {
+        "ok": False,
+        "update": False,
+        "currentVersion": APP_VERSION,
+        "repo": GITHUB_REPO,
+        "message": "Не удалось проверить обновления.",
+    }
+    headers = {"User-Agent": f"{APP_NAME}/{APP_VERSION}", "Accept": "application/vnd.github+json"}
+    current_tuple = _version_tuple(APP_VERSION)
+
+    # 1) Main path: GitHub Releases. Pick the newest release by semver tag_name.
+    try:
+        req = urllib.request.Request(f"https://api.github.com/repos/{GITHUB_REPO}/releases?per_page=30", headers=headers)
+        with urllib.request.urlopen(req, timeout=8) as r:
+            releases = json.loads(r.read().decode("utf-8", "ignore"))
+        candidates = []
+        for rel in releases if isinstance(releases, list) else []:
+            if rel.get("draft"):
+                continue
+            tag = rel.get("tag_name") or rel.get("name") or ""
+            ver = _normalize_version(tag)
+            if not ver:
+                continue
+            vt = _version_tuple(ver)
+            candidates.append((vt, ver, rel))
+        if candidates:
+            candidates.sort(key=lambda x: x[0], reverse=True)
+            latest_tuple, latest_v, latest_rel = candidates[0]
+            has_update = latest_tuple > current_tuple
+            download_url = _best_release_asset(latest_rel)
+            result.update({
+                "ok": True,
+                "source": "release",
+                "update": bool(has_update),
+                "currentVersion": APP_VERSION,
+                "latestVersion": latest_v,
+                "url": latest_rel.get("html_url") or f"https://github.com/{GITHUB_REPO}/releases/latest",
+                "downloadUrl": download_url,
+                "message": (f"Доступна новая версия BetterASF v{latest_v}" if has_update else f"BetterASF v{APP_VERSION} — актуальная версия."),
+            })
+            return result
+    except Exception as e:
+        log(f"GitHub update releases error: {e}")
+
+    # 2) Fallback: if no releases exist, check tags. This is not a release download, but shows a new tag.
+    try:
+        req = urllib.request.Request(f"https://api.github.com/repos/{GITHUB_REPO}/tags?per_page=30", headers=headers)
+        with urllib.request.urlopen(req, timeout=8) as r:
+            tags = json.loads(r.read().decode("utf-8", "ignore"))
+        candidates = []
+        for tag in tags if isinstance(tags, list) else []:
+            name = tag.get("name") or ""
+            ver = _normalize_version(name)
+            if ver:
+                candidates.append((_version_tuple(ver), ver, tag))
+        if candidates:
+            candidates.sort(key=lambda x: x[0], reverse=True)
+            latest_tuple, latest_v, tag = candidates[0]
+            has_update = latest_tuple > current_tuple
+            zip_url = f"https://github.com/{GITHUB_REPO}/archive/refs/tags/{tag.get('name')}.zip"
+            result.update({
+                "ok": True,
+                "source": "tag",
+                "update": bool(has_update),
+                "currentVersion": APP_VERSION,
+                "latestVersion": latest_v,
+                "url": f"https://github.com/{GITHUB_REPO}/releases/latest",
+                "downloadUrl": zip_url,
+                "message": (f"Доступен новый тег BetterASF v{latest_v}" if has_update else f"BetterASF v{APP_VERSION} — актуальная версия."),
+            })
+            return result
+    except Exception as e:
+        log(f"GitHub update tags error: {e}")
+        result["error"] = str(e)
+
+    return result
+
+
+def make_handler(ui_path, asf_host, asf_port, inject, stats_provider=None, exit_callback=None):
     class Handler(http.server.BaseHTTPRequestHandler):
         timeout = 10
         good_host = None
@@ -638,6 +1222,44 @@ def make_handler(ui_path, asf_host, asf_port, inject):
             }
             self._send_bytes(json.dumps(info).encode(), "application/json")
 
+        def _settings(self):
+            if self.command == "GET":
+                data = _load_settings()
+                payload = {
+                    "minimize_to_tray": bool(data.get("minimize_to_tray", False)),
+                    "autostart": bool(data.get("autostart", False)),
+                    "economy_mode": bool(data.get("economy_mode", False)),
+                    "auto_hour_farm_after_cards": bool(data.get("auto_hour_farm_after_cards", False)),
+                    "start_hour_farm_on_launch": bool(data.get("start_hour_farm_on_launch", False)),
+                    "launch_minimized": bool(data.get("launch_minimized", False)),
+                    "steam_api_key": bool((RUNTIME.get("steam_api_key") or data.get("steam_api_key") or "").strip()),
+                    "ui_mode": inject.get("interfaceMode", "browser"),
+                }
+                self._send_bytes(json.dumps(payload).encode(), "application/json")
+                return
+            try:
+                length = int(self.headers.get("Content-Length", 0) or 0)
+                raw = self.rfile.read(length).decode("utf-8", "ignore") if length else "{}"
+                patch = json.loads(raw or "{}")
+            except Exception:
+                self._send_bytes(json.dumps({"ok": False, "message": "bad json"}).encode(), "application/json", 400)
+                return
+            ok = True
+            for key, value in patch.items():
+                if key == "autostart":
+                    ok = bool(set_autostart_enabled(bool(value))) and ok
+                elif key in ("minimize_to_tray", "economy_mode", "auto_hour_farm_after_cards", "start_hour_farm_on_launch", "launch_minimized"):
+                    set_app_setting(key, bool(value))
+                elif key == "theme" and value in ("dark", "light"):
+                    save_theme(value)
+                elif key == "steam_api_key":
+                    val = (value or "").strip()
+                    RUNTIME["steam_api_key"] = val
+                    save_api_key(val)
+                else:
+                    ok = False
+            self._send_bytes(json.dumps({"ok": ok}).encode(), "application/json")
+
         def _games(self):
             from urllib.parse import urlparse, parse_qs
             qs = parse_qs(urlparse(self.path).query)
@@ -710,6 +1332,16 @@ def make_handler(ui_path, asf_host, asf_port, inject):
         def do_GET(self):
             if self.path.startswith("/__health"):
                 self._health()
+            elif self.path.startswith("/__check_update"):
+                self._send_bytes(json.dumps(check_github_update()).encode(), "application/json")
+            elif self.path.startswith("/__settings"):
+                self._settings()
+            elif self.path.startswith("/__appstats"):
+                try:
+                    info = stats_provider() if stats_provider else app_memory_stats(None)
+                except Exception as e:
+                    info = {"error": str(e), "memoryKb": 0, "memoryBytes": 0}
+                self._send_bytes(json.dumps(info).encode(), "application/json")
             elif self.path.startswith("/__games"):
                 self._games()
             elif self.path.startswith("/Api/"):
@@ -718,7 +1350,16 @@ def make_handler(ui_path, asf_host, asf_port, inject):
                 self._serve_static()
 
         def do_POST(self):
-            if self.path.startswith("/Api/"):
+            if self.path.startswith("/__settings"):
+                self._settings()
+            elif self.path.startswith("/__exit"):
+                self._send_bytes(json.dumps({"ok": True}).encode(), "application/json")
+                if exit_callback:
+                    try:
+                        threading.Thread(target=exit_callback, daemon=True).start()
+                    except Exception:
+                        pass
+            elif self.path.startswith("/Api/"):
                 self._proxy("POST")
             else:
                 self.send_error(404)
@@ -737,21 +1378,360 @@ class ThreadingServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     allow_reuse_address = True
 
 
-def start_local_server(ui_path, asf_host, asf_port, inject, want_port=0):
-    handler = make_handler(ui_path, asf_host, asf_port, inject)
+def start_local_server(ui_path, asf_host, asf_port, inject, want_port=0, stats_provider=None, exit_callback=None):
+    handler = make_handler(ui_path, asf_host, asf_port, inject, stats_provider, exit_callback)
     httpd = ThreadingServer(("127.0.0.1", want_port), handler)
     port = httpd.server_address[1]
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     return httpd, port
 
 
+def _browser_candidates(configured=""):
+    cands = []
+    if configured:
+        cands.append(Path(configured))
+    if os.name == "nt":
+        envs = [os.environ.get("PROGRAMFILES"), os.environ.get("PROGRAMFILES(X86)"), os.environ.get("LOCALAPPDATA")]
+        for base in [e for e in envs if e]:
+            b = Path(base)
+            cands += [
+                b / "Microsoft" / "Edge" / "Application" / "msedge.exe",
+                b / "Google" / "Chrome" / "Application" / "chrome.exe",
+                b / "Chromium" / "Application" / "chrome.exe",
+            ]
+    else:
+        for nm in ("microsoft-edge", "msedge", "google-chrome", "chromium", "chromium-browser", "firefox"):
+            cands.append(Path(nm))
+    return cands
+
+
+def _which_program(name):
+    try:
+        import shutil
+        found = shutil.which(str(name))
+        return found
+    except Exception:
+        return None
+
+
+def _trim_process_working_set(pid):
+    """Сбрасывает неиспользуемые resident pages процесса. Это снижает Working Set в Диспетчере задач."""
+    if os.name != "nt":
+        return False
+    try:
+        import ctypes
+        from ctypes import wintypes
+        pid = int(pid)
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        PROCESS_SET_QUOTA = 0x0100
+        kernel32 = ctypes.windll.kernel32
+        psapi = ctypes.windll.psapi
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SET_QUOTA, False, pid)
+        if not handle:
+            return False
+        try:
+            # EmptyWorkingSet is softer and safer than SetProcessWorkingSetSize(-1, -1).
+            psapi.EmptyWorkingSet.restype = wintypes.BOOL
+            return bool(psapi.EmptyWorkingSet(handle))
+        finally:
+            kernel32.CloseHandle(handle)
+    except Exception:
+        return False
+
+
+def start_memory_trim_thread(cfg, asf_holder):
+    enabled = str(cfg.get("memory_trim", "true")).lower() in ("1", "true", "yes", "on")
+    if os.name != "nt" or not enabled:
+        return
+    try:
+        interval = max(10, int(cfg.get("memory_trim_interval", "30") or 30))
+    except Exception:
+        interval = 30
+
+    def worker():
+        import gc
+        log(f"Memory Trim: включён, интервал {interval}с.")
+        time.sleep(8)
+        while True:
+            try:
+                gc.collect()
+                mp = _child_process_map()
+                self_pid = os.getpid()
+                pids = [self_pid] + _descendants(self_pid, mp)
+                exclude = set()
+                proc = asf_holder.get("proc")
+                if proc and proc.proc:
+                    try:
+                        asf_pid = int(proc.proc.pid)
+                        exclude.add(asf_pid)
+                        exclude.update(_descendants(asf_pid, mp))
+                    except Exception:
+                        pass
+                browser_pid = RUNTIME.get("browser_pid")
+                if browser_pid:
+                    try:
+                        browser_pid = int(browser_pid)
+                        exclude.add(browser_pid)
+                        exclude.update(_descendants(browser_pid, mp))
+                    except Exception:
+                        pass
+                include_orphans = str(cfg.get("memory_include_orphan_webview2", "true")).lower() in ("1", "true", "yes", "on")
+                name_map = _process_name_map()
+                webview_pids, _ = _webview2_pids_for_stats(mp, name_map, _descendants(self_pid, mp), include_orphans)
+                pids = list(dict.fromkeys(pids + list(webview_pids)))
+                for pid in pids:
+                    if pid not in exclude:
+                        _trim_process_working_set(pid)
+            except Exception:
+                pass
+            time.sleep(interval)
+
+    threading.Thread(target=worker, daemon=True).start()
+
+
+def configure_webview2_low_memory(cfg):
+    """Настраивает Edge WebView2 через WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS.
+
+    Режим рассчитан на тест памяти: single-process + отключение фоновых сервисов.
+    GPU по умолчанию НЕ отключаем, потому что на системе пользователя это уже давало серое окно.
+    Если нужно проверить совсем жёстко — webview_disable_gpu=true в config.ini.
+    """
+    enabled = str(cfg.get("webview_low_memory", "true")).lower() in ("1", "true", "yes", "on")
+    if os.name != "nt" or not enabled:
+        os.environ.pop("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", None)
+        os.environ.pop("WEBVIEW2_USER_DATA_FOLDER", None)
+        return
+
+    profile = DATA_DIR / "WebView2Profile"
+    try:
+        profile.mkdir(parents=True, exist_ok=True)
+        os.environ["WEBVIEW2_USER_DATA_FOLDER"] = str(profile)
+    except Exception:
+        pass
+
+    aggressive = str(cfg.get("webview_aggressive", "true")).lower() in ("1", "true", "yes", "on")
+    single_process = str(cfg.get("webview_single_process", "true")).lower() in ("1", "true", "yes", "on")
+    disable_gpu = str(cfg.get("webview_disable_gpu", "false")).lower() in ("1", "true", "yes", "on")
+    in_process_gpu = str(cfg.get("webview_in_process_gpu", "false")).lower() in ("1", "true", "yes", "on")
+
+    flags = [
+        # Edge background services/networking not needed by the local UI
+        "--disable-background-networking",
+        "--disable-sync",
+        "--disable-extensions",
+        "--disable-component-update",
+        "--disable-default-apps",
+        "--disable-domain-reliability",
+        "--disable-background-mode",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--no-service-autorun",
+
+        # Unused subsystems
+        "--disable-print-preview",
+        "--disable-speech-api",
+        "--disable-notifications",
+        "--mute-audio",
+        "--metrics-recording-only",
+        "--disable-logging",
+        "--log-level=3",
+
+        # Cache/profile: reduce disk and media cache
+        "--disk-cache-size=1",
+        "--media-cache-size=1",
+
+        # Limit UI JS heap so leaks/DOM growth cannot expand indefinitely
+        "--js-flags=--max-old-space-size=96",
+    ]
+
+    if single_process:
+        flags += [
+            # Requested WebView2 single-process mode. Chromium/WebView2 can partially ignore
+            # this flag in newer runtimes, but when allowed the renderer moves into the browser process.
+            "--single-process",
+            "--renderer-process-limit=1",
+            "--process-per-site",
+        ]
+
+    if aggressive:
+        flags += [
+            # Reduce isolated renderer process count and extra services.
+            # This is less safe for a normal browser, but BetterASF UI is local: 127.0.0.1.
+            "--disable-site-isolation-trials",
+            "--disable-web-security",
+            "--disable-features=IsolateOrigins,site-per-process,CalculateNativeWinOcclusion,BackForwardCache,AcceptCHFrame,AutofillServerCommunication,OptimizationHints,MediaRouter,InterestFeedContentSuggestions,msSmartScreenProtection",
+            "--disable-breakpad",
+            "--disable-crash-reporter",
+            "--disable-hang-monitor",
+            "--disable-ipc-flooding-protection",
+        ]
+
+    if in_process_gpu and not disable_gpu:
+        flags += [
+            # Try to remove the separate GPU process while keeping hardware acceleration.
+            # May be unstable on some drivers, therefore exposed in config.ini.
+            "--in-process-gpu",
+        ]
+
+    if disable_gpu:
+        flags += [
+            # The riskiest block. It can reduce GPU memory, but may cause a gray window on some systems.
+            "--disable-gpu",
+            "--disable-gpu-compositing",
+            "--disable-accelerated-video-decode",
+            "--disable-accelerated-video-encode",
+            "--disable-smooth-scrolling",
+        ]
+
+    extra = (cfg.get("webview_extra_args") or "").strip()
+    if extra:
+        flags.extend(extra.split())
+
+    # Remove duplicates while preserving order.
+    value = " ".join(dict.fromkeys(flags))
+    os.environ["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = value
+    log(
+        "WebView2 Low Memory: включён "
+        f"(aggressive={aggressive}, single_process={single_process}, in_process_gpu={in_process_gpu}, disable_gpu={disable_gpu})."
+    )
+    log(f"WebView2 args: {value}")
+
+
+def launch_browser_app(url, configured=""):
+    """Открывает UI во внешнем браузере в app-режиме без WebView2 внутри BetterASF."""
+    profile = DATA_DIR / "BrowserProfile"
+    profile.mkdir(parents=True, exist_ok=True)
+    for cand in _browser_candidates(configured):
+        exe = None
+        if cand.exists():
+            exe = str(cand)
+        else:
+            exe = _which_program(str(cand))
+        if not exe:
+            continue
+        name = Path(exe).name.lower()
+        try:
+            if "firefox" in name:
+                cmd = [exe, "--new-window", url]
+            else:
+                cmd = [
+                    exe, f"--app={url}", f"--user-data-dir={profile}",
+                    "--no-first-run", "--no-default-browser-check", "--disable-extensions",
+                ]
+            log(f"Запуск внешнего интерфейса: {' '.join(cmd)}")
+            return subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as e:
+            log(f"Не удалось запустить браузер {exe}: {e}")
+            continue
+    try:
+        import webbrowser
+        log("Не найден Edge/Chrome, открываю системный браузер обычным способом.")
+        webbrowser.open(url)
+    except Exception as e:
+        log(f"Не удалось открыть браузер: {e}")
+    return None
+
+
 class Bridge:
     def __init__(self):
         self._window = None
         self._max = False
+        self._tray_icon = None
+        self._tray_ready = False
+
+    def _show_window(self, *args):
+        try:
+            if self._window:
+                try:
+                    self._window.show()
+                except Exception:
+                    pass
+                try:
+                    self._window.restore()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    def _exit_from_tray(self, *args):
+        try:
+            self._stop_tray()
+        except Exception:
+            pass
+        try:
+            if self._window:
+                self._window.destroy()
+        except Exception:
+            pass
+
+    def _ensure_tray(self):
+        if self._tray_ready:
+            return True
+        try:
+            import pystray
+            from PIL import Image, ImageDraw
+
+            img = None
+            for icon_path in (RES_DIR / "icon.ico", APP_DIR / "icon.ico", RES_DIR / "icon_source.png", APP_DIR / "icon_source.png"):
+                try:
+                    if icon_path.exists():
+                        img = Image.open(icon_path).convert("RGBA")
+                        img = img.resize((64, 64), Image.LANCZOS)
+                        log(f"Tray: используется иконка приложения {icon_path}")
+                        break
+                except Exception as e:
+                    log(f"Tray: не удалось загрузить иконку {icon_path}: {e}")
+            if img is None:
+                # Fallback only when the icon file is missing.
+                img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+                d = ImageDraw.Draw(img)
+                d.rounded_rectangle((8, 8, 56, 56), radius=14, fill=(111, 123, 255, 255))
+                d.ellipse((25, 25, 39, 39), fill=(255, 255, 255, 255))
+
+            menu = pystray.Menu(
+                pystray.MenuItem("Открыть BetterASF", self._show_window, default=True),
+                pystray.MenuItem("Выход", self._exit_from_tray),
+            )
+            self._tray_icon = pystray.Icon(APP_NAME, img, APP_NAME, menu)
+            self._tray_icon.run_detached()
+            self._tray_ready = True
+            log("Tray: иконка создана.")
+            return True
+        except Exception as e:
+            log(f"Tray недоступен ({e}); fallback = обычное сворачивание.")
+            return False
+
+    def _stop_tray(self):
+        icon = self._tray_icon
+        self._tray_icon = None
+        self._tray_ready = False
+        if icon:
+            try:
+                icon.stop()
+            except Exception:
+                pass
+
+    def _hide_to_tray(self):
+        try:
+            if self._ensure_tray():
+                try:
+                    self._window.hide()
+                except Exception:
+                    self._window.minimize()
+                return True
+        except Exception:
+            pass
+        try:
+            self._window.minimize()
+        except Exception:
+            pass
+        return False
 
     def minimize(self):
         try:
+            if get_app_setting("minimize_to_tray", False):
+                return self._hide_to_tray()
             self._window.minimize()
         except Exception:
             pass
@@ -765,9 +1745,43 @@ class Bridge:
 
     def close(self):
         try:
+            if get_app_setting("minimize_to_tray", False):
+                return self._hide_to_tray()
             self._window.destroy()
         except Exception:
             pass
+        return False
+
+    def get_settings(self):
+        data = _load_settings()
+        return {
+            "minimize_to_tray": bool(data.get("minimize_to_tray", False)),
+            "autostart": bool(data.get("autostart", False)),
+            "economy_mode": bool(data.get("economy_mode", False)),
+            "auto_hour_farm_after_cards": bool(data.get("auto_hour_farm_after_cards", False)),
+            "start_hour_farm_on_launch": bool(data.get("start_hour_farm_on_launch", False)),
+            "launch_minimized": bool(data.get("launch_minimized", False)),
+        }
+
+    def set_app_setting(self, key, value):
+        if key == "minimize_to_tray":
+            set_app_setting(key, bool(value))
+            return True
+        if key == "autostart":
+            return set_autostart_enabled(bool(value))
+        if key == "economy_mode":
+            set_app_setting(key, bool(value))
+            return True
+        if key == "auto_hour_farm_after_cards":
+            set_app_setting(key, bool(value))
+            return True
+        if key == "start_hour_farm_on_launch":
+            set_app_setting(key, bool(value))
+            return True
+        if key == "launch_minimized":
+            set_app_setting(key, bool(value))
+            return True
+        return False
 
     def set_theme(self, theme):
         if theme in ("dark", "light"):
@@ -784,6 +1798,8 @@ class Bridge:
 def monitor_ipc(host, port, timeout, asf_holder):
     deadline = time.time() + timeout
     last = None
+    restarts = 0
+    dead_since = None
     while time.time() < deadline:
         ready = ipc_ready(host, port)
         if ready != last:
@@ -794,8 +1810,26 @@ def monitor_ipc(host, port, timeout, asf_holder):
             return
         proc = asf_holder.get("proc")
         if proc is not None and not proc.alive():
-            log("ВНИМАНИЕ: процесс ASF завершился. Смотрите log.txt в папке config ASF.")
-            return
+            if dead_since is None:
+                dead_since = time.time()
+                log("ASF завершился до поднятия IPC. Жду несколько секунд: возможно, это штатный рестарт после самообновления.")
+            # If ASF starts a new process after update, IPC will appear without our intervention.
+            # Only if the port is still unavailable after 8 seconds, start ASF again manually.
+            if (time.time() - dead_since) >= 8:
+                if restarts < 2:
+                    restarts += 1
+                    dead_since = None
+                    log("IPC так и не появился после обновления. Пробую запустить ASF снова.")
+                    try:
+                        proc.restart()
+                    except Exception as e:
+                        log(f"Ошибка повторного запуска ASF: {e}")
+                    time.sleep(2.0)
+                    continue
+                log("ВНИМАНИЕ: процесс ASF завершился. Смотрите log.txt в папке config ASF.")
+                return
+        else:
+            dead_since = None
         time.sleep(1.0)
     log(f"ТАЙМАУТ: IPC {host}:{port} не поднялся за {timeout}с.")
     proc = asf_holder.get("proc")
@@ -807,6 +1841,9 @@ def main():
     cfg = load_config()
     host = cfg["ipc_host"]
     port = int(cfg["ipc_port"])
+    ui_mode = str(cfg.get("ui_mode", "browser")).strip().lower()
+    if ui_mode not in ("browser", "webview"):
+        ui_mode = "browser"
     frameless = str(cfg["frameless"]).lower() in ("1", "true", "yes", "on")
     theme = cfg["theme"] if cfg["theme"] in ("dark", "light") else "dark"
 
@@ -818,9 +1855,14 @@ def main():
     log(f"frozen={is_frozen()}  APP_DIR={APP_DIR}")
     log(f"DATA_DIR={DATA_DIR}")
     log(f"UI_DIR={UI_DIR}")
-    log(f"IPC цель: {host}:{port}  start_asf={cfg['start_asf']}  password={'да' if cfg['ipc_password'] else 'нет'}")
+    if ensure_program_files_install(cfg):
+        return
+    ensure_user_shortcuts(cfg)
+    log(f"IPC цель: {host}:{port}  start_asf={cfg['start_asf']}  password={'да' if cfg['ipc_password'] else 'нет'}  ui_mode={ui_mode}")
 
     asf_holder = {"proc": None}
+    exit_event = threading.Event()
+    start_memory_trim_thread(cfg, asf_holder)
 
     def launch_asf():
         if str(cfg["start_asf"]).lower() not in ("1", "true", "yes", "on"):
@@ -854,8 +1896,11 @@ def main():
         "password": cfg["ipc_password"],
         "theme": theme,
         "appName": APP_NAME,
+        "appVersion": APP_VERSION,
+        "githubRepo": GITHUB_REPO,
         "hasApiKey": bool(cfg.get("steam_api_key")),
-        "frameless": frameless,
+        "frameless": frameless if ui_mode == "webview" else False,
+        "interfaceMode": ui_mode,
     }
 
     if not UI_DIR.exists():
@@ -863,7 +1908,15 @@ def main():
         sys.exit(1)
 
     try:
-        httpd, ui_port = start_local_server(UI_DIR, host, port, inject, int(cfg["ui_port"]))
+        httpd, ui_port = start_local_server(
+            UI_DIR, host, port, inject, int(cfg["ui_port"]),
+            stats_provider=lambda: app_memory_stats(
+                asf_holder.get("proc").proc.pid if asf_holder.get("proc") and asf_holder.get("proc").proc else None,
+                exclude_pids=[RUNTIME.get("browser_pid")],
+                include_orphan_webview2=str(cfg.get("memory_include_orphan_webview2", "true")).lower() in ("1", "true", "yes", "on"),
+            ),
+            exit_callback=lambda: exit_event.set(),
+        )
     except Exception as e:
         log(f"Не удалось запустить локальный сервер: {e}")
         sys.exit(1)
@@ -881,7 +1934,63 @@ def main():
             break
         time.sleep(0.05)
 
+    _stopped = {"done": False}
+    bridge_ref = {"bridge": None}
+
+    def cleanup():
+        if _stopped["done"]:
+            return
+        _stopped["done"] = True
+        log("Завершение работы...")
+        try:
+            br = bridge_ref.get("bridge")
+            if br:
+                br._stop_tray()
+        except Exception:
+            pass
+        try:
+            httpd.shutdown()
+        except Exception:
+            pass
+        proc = asf_holder.get("proc")
+        if proc:
+            proc.stop()
+
+    if ui_mode == "browser":
+        browser_proc = launch_browser_app(local_url, cfg.get("browser_path", ""))
+        RUNTIME["browser_pid"] = browser_proc.pid if browser_proc is not None else None
+        log("Browser Mode: WebView2 внутри BetterASF не запускается. Закройте окно браузера или нажмите Ctrl+C для выхода.")
+        try:
+            while not exit_event.is_set():
+                if browser_proc is not None and browser_proc.poll() is not None:
+                    log("Окно внешнего браузера закрыто.")
+                    break
+                time.sleep(0.5)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            cleanup()
+        return
+
+    if webview is None:
+        log("pywebview недоступен, переключаюсь на Browser Mode.")
+        browser_proc = launch_browser_app(local_url, cfg.get("browser_path", ""))
+        RUNTIME["browser_pid"] = browser_proc.pid if browser_proc is not None else None
+        try:
+            while not exit_event.is_set():
+                if browser_proc is not None and browser_proc.poll() is not None:
+                    break
+                time.sleep(0.5)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            cleanup()
+        return
+
+    configure_webview2_low_memory(cfg)
+
     bridge = Bridge()
+    bridge_ref["bridge"] = bridge
     bg = "#000000" if theme == "dark" else "#f5f5f7"
     window = webview.create_window(
         title=cfg["window_title"],
@@ -897,21 +2006,20 @@ def main():
     )
     bridge._window = window
 
-    _stopped = {"done": False}
+    def on_loaded():
+        if get_app_setting("launch_minimized", False):
+            def delayed_minimize():
+                time.sleep(0.35)
+                try:
+                    bridge.minimize()
+                except Exception:
+                    pass
+            threading.Thread(target=delayed_minimize, daemon=True).start()
 
-    def cleanup():
-        if _stopped["done"]:
-            return
-        _stopped["done"] = True
-        log("Завершение работы...")
-        try:
-            httpd.shutdown()
-        except Exception:
-            pass
-        proc = asf_holder.get("proc")
-        if proc:
-            proc.stop()
-
+    try:
+        window.events.loaded += on_loaded
+    except Exception:
+        pass
     window.events.closed += cleanup
 
     gui = "edgechromium" if os.name == "nt" else None

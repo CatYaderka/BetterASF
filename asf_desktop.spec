@@ -1,34 +1,40 @@
 # -*- mode: python ; coding: utf-8 -*-
-# PyInstaller spec для ASF Desktop (onefile, без консоли).
-# Тема (assets) и config.ini вшиваются внутрь exe.
-# Сборка:  pyinstaller asf_desktop.spec   (на Windows)
+# PyInstaller spec for BetterASF (onefile, no console).
+# UI assets and config.ini are bundled into the executable.
+# Build on Windows: pyinstaller asf_desktop.spec
 
 import os
 from PyInstaller.utils.hooks import collect_all
 
 block_cipher = None
 
-# pywebview + edgechromium backend (WebView2) тянут доп. данные.
+# pywebview + edgechromium backend (WebView2) require extra data files.
 datas = [
     ('ui', 'ui'),
     ('config.ini', '.'),
 ]
-# Встроенный ASF: если рядом есть папка _asf (положите туда содержимое ASF),
-# она будет вшита в .exe и распакована при первом запуске в ASF-runtime/.
+if os.path.exists('icon.ico'):
+    datas.append(('icon.ico', '.'))
+if os.path.exists('icon_source.png'):
+    datas.append(('icon_source.png', '.'))
+# Embedded ASF: if the _asf folder exists, it is bundled into the executable
+# and extracted to ASF-runtime on first launch.
 if os.path.isdir('_asf'):
     datas.append(('_asf', '_asf'))
-    print('[spec] Встроенный ASF будет вшит в .exe (папка _asf найдена).')
+    print('[spec] Embedded ASF will be bundled (_asf folder found).')
 else:
-    print('[spec] Папка _asf не найдена -> ASF НЕ будет вшит (нужен рядом ArchiSteamFarm.exe).')
+    print('[spec] _asf folder not found -> ASF will not be bundled; ArchiSteamFarm.exe is required nearby.')
 binaries = []
 hiddenimports = [
     'webview',
     'webview.platforms.edgechromium',
     'clr',          # pythonnet
+    'pystray',      # tray icon
+    'PIL', 'PIL.Image', 'PIL.ImageDraw',
 ]
 
-# Собрать всё, что нужно pywebview (бэкенды, dll'ки).
-for pkg in ('webview',):
+# Collect everything required by pywebview (backends and DLLs).
+for pkg in ('webview', 'pystray', 'PIL'):
     d, b, h = collect_all(pkg)
     datas += d
     binaries += b
@@ -68,7 +74,7 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,          # без чёрной консоли
+    console=False,          # no console window
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
