@@ -66,7 +66,9 @@
         <div class="stat-pill"><b id="st-total">0</b><span>Всего</span></div>
       </div>
       <div class="sys">
-        <div class="sys-row"><span>Память</span><b id="sys-mem">—</b></div>
+        <div class="sys-row"><span>Память всего</span><b id="sys-mem-total">—</b></div>
+        <div class="sys-row"><span>ASF</span><b id="sys-mem">—</b></div>
+        <div class="sys-row"><span>BetterASF</span><b id="sys-app-mem">—</b></div>
         <div class="sys-row"><span>Аптайм</span><b id="sys-up">—</b></div>
         <div class="sys-row"><span>Версия</span><b id="sys-ver">—</b></div>
       </div>
@@ -190,14 +192,78 @@
           </div>
         </div>
         
-        <div class="settings-row" style="margin-top: 24px; display: flex; align-items: center; gap: 12px;">
-          <label class="field-label" style="margin-bottom: 0;" for="settings-theme-select">Выбрать тему из списка:</label>
-          <select id="settings-theme-select" class="theme-select" style="padding: 8px 12px; border-radius: var(--r-sm); background: var(--surface-2); color: var(--text); border: 1px solid var(--border); outline: none; cursor: pointer;">
+        <div class="settings-row settings-row--select">
+          <label class="field-label" for="settings-theme-select">Выбрать тему из списка:</label>
+          <select id="settings-theme-select" class="theme-select">
             <option value="dark">Тёмная тема (Стандартная)</option>
             <option value="light">Светлая тема (Стандартная)</option>
             <option value="dark-img">Тёмная тема (Dead Dream)</option>
             <option value="light-img">Светлая тема (Dead Dream)</option>
           </select>
+        </div>
+      </div>
+
+      <div class="cmd-box settings-container settings-system">
+        <h2 class="settings-section-title">Поведение приложения</h2>
+        <p class="settings-sub">Настройки самого BetterASF. Они сохраняются в Documents\BetterASF\settings.json.</p>
+
+        <label class="switch-row" for="set-minimize-tray">
+          <span class="switch-text">
+            <b>Сворачивание в трей</b>
+            <small>Кнопка закрытия будет сворачивать BetterASF, не завершая ASF.</small>
+          </span>
+          <input type="checkbox" id="set-minimize-tray">
+          <span class="switch-ui" aria-hidden="true"></span>
+        </label>
+
+        <label class="switch-row" for="set-autostart">
+          <span class="switch-text">
+            <b>Запуск вместе с системой</b>
+            <small>Добавляет BetterASF в автозагрузку текущего пользователя Windows.</small>
+          </span>
+          <input type="checkbox" id="set-autostart">
+          <span class="switch-ui" aria-hidden="true"></span>
+        </label>
+
+        <label class="switch-row" for="set-economy-mode">
+          <span class="switch-text">
+            <b>Экономичный режим интерфейса</b>
+            <small>Отключает фоновые картинки, blur/тяжёлые тени, аватарки и реже обновляет данные.</small>
+          </span>
+          <input type="checkbox" id="set-economy-mode">
+          <span class="switch-ui" aria-hidden="true"></span>
+        </label>
+
+        <label class="switch-row" for="set-auto-hour-farm">
+          <span class="switch-text">
+            <b>Запуск фарма часов после карточек</b>
+            <small>Когда обычный фарм карточек закончится, BetterASF автоматически запустит топ-32 игр по часам.</small>
+          </span>
+          <input type="checkbox" id="set-auto-hour-farm">
+          <span class="switch-ui" aria-hidden="true"></span>
+        </label>
+
+        <label class="switch-row" for="set-start-hour-farm">
+          <span class="switch-text">
+            <b>Фарм часов при запуске BetterASF</b>
+            <small>При старте интерфейса сразу запускает топ-32 игр на аккаунтах без оставшихся карточек.</small>
+          </span>
+          <input type="checkbox" id="set-start-hour-farm">
+          <span class="switch-ui" aria-hidden="true"></span>
+        </label>
+
+        <label class="switch-row" for="set-launch-minimized">
+          <span class="switch-text">
+            <b>Запуск в минимизированном состоянии</b>
+            <small>После открытия BetterASF сразу свернётся; если включён трей — спрячется в трей.</small>
+          </span>
+          <input type="checkbox" id="set-launch-minimized">
+          <span class="switch-ui" aria-hidden="true"></span>
+        </label>
+
+        <div class="settings-mini-actions">
+          <button class="mini-square-btn" id="asf-restart-action" title="Перезагрузить ASF" type="button">↻</button>
+          <button class="mini-square-btn" id="asf-update-action" title="Проверить обновление ASF" type="button">⇩</button>
         </div>
       </div>
     </section>
@@ -212,6 +278,12 @@
 </button>
 
 <div id="toast" class="toast"></div>
+<div id="update-banner" class="update-banner" aria-hidden="true">
+  <div class="update-banner-text" id="update-banner-text">Доступно обновление BetterASF</div>
+  <button class="update-banner-link" id="update-banner-link" type="button">GitHub</button>
+  <button class="update-banner-ok" id="update-banner-ok" type="button" title="Закрыть">✓</button>
+</div>
+<div id="context-menu" class="context-menu" aria-hidden="true"></div>
 
 <div class="modal-overlay" id="addbot-modal">
   <div class="modal modal--wide modal--scroll">

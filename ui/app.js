@@ -11,6 +11,7 @@ const API_CANDIDATES = (() => {
 let API_BASE = API_CANDIDATES[0] || '';
 let IPC_PASSWORD = CFG.password || localStorage.getItem('asf_ipc_password') || '';
 let pollTimer = null;
+let ECONOMY_MODE = localStorage.getItem('asf_economy_mode') === '1';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
@@ -29,6 +30,44 @@ function toast(msg, type = '') {
   el.className = 'toast show ' + type;
   clearTimeout(el._t);
   el._t = setTimeout(() => { el.className = 'toast ' + type; }, 2600);
+}
+
+function hideUpdateBanner(id = '') {
+  const b = $('#update-banner');
+  if (b) { b.classList.remove('show'); b.setAttribute('aria-hidden', 'true'); }
+  if (id) localStorage.setItem('betterasf_update_dismissed', id);
+}
+
+async function checkBetterASFUpdate(manual = false) {
+  try {
+    const r = await fetch('/__check_update', { cache: 'no-store' });
+    const d = await r.json();
+    if (!d || !d.ok) {
+      if (manual) toast((d && d.message) || 'Не удалось проверить обновления', 'err');
+      return;
+    }
+    const updateId = d.latestVersion || d.latestCommit || d.downloadUrl || d.url || 'unknown';
+    if (!d.update) {
+      if (manual) toast(d.message || 'Обновлений нет', 'ok');
+      return;
+    }
+    if (!manual && localStorage.getItem('betterasf_update_dismissed') === updateId) return;
+
+    const b = $('#update-banner');
+    const text = $('#update-banner-text');
+    const link = $('#update-banner-link');
+    const ok = $('#update-banner-ok');
+    if (!b || !text || !link || !ok) return;
+    text.textContent = d.message || 'Доступно обновление BetterASF';
+    link.textContent = d.downloadUrl ? 'Скачать' : 'GitHub';
+    link.onclick = () => { const u = d.downloadUrl || d.url; if (u) window.open(u, '_blank'); };
+    ok.onclick = () => hideUpdateBanner(updateId);
+    b.classList.add('show');
+    b.setAttribute('aria-hidden', 'false');
+    logEvent('GitHub: ' + text.textContent);
+  } catch (e) {
+    if (manual) toast('Ошибка проверки обновлений: ' + e.message, 'err');
+  }
 }
 
 function setConn(ok) {
@@ -92,6 +131,7 @@ function isPaused(bot) {
 }
 
 function botAvatar(bot) {
+  if (ECONOMY_MODE) return '';
   if (bot.AvatarHash && /^[a-f0-9]{40}$/i.test(bot.AvatarHash)) {
     return `https://avatars.akamai.steamstatic.com/${bot.AvatarHash}_medium.jpg`;
   }
@@ -458,15 +498,42 @@ function fmtUptime(startTimeIso) {
   return `${m}м`;
 }
 
+async function refreshAppStats(asfKb = 0) {
+  try {
+    const r = await fetch('/__appstats', { cache: 'no-store' });
+    const d = await r.json();
+    const appKb = Number(d.memoryKb || 0);
+    const webviewKb = Number(d.webviewMemoryKb || 0);
+    const totalKb = appKb + Number(asfKb || 0);
+    const appEl = $('#sys-app-mem');
+    const totalEl = $('#sys-mem-total');
+    if (appEl) {
+      appEl.textContent = fmtMem(appKb);
+      if (webviewKb) {
+        appEl.title = 'Python/UI backend + WebView2: ' + fmtMem(webviewKb) +
+          (d.webviewOrphanMode ? ' (WebView2 найден не как дочерний процесс)' : '');
+      }
+    }
+    if (totalEl) totalEl.textContent = totalKb ? fmtMem(totalKb) : '—';
+  } catch (e) {
+    const appEl = $('#sys-app-mem');
+    if (appEl) appEl.textContent = '—';
+  }
+}
+
 async function refreshASF() {
   try {
     const r = await api('/Api/ASF');
     const d = r && r.Result ? r.Result : {};
-    $('#sys-mem').textContent = fmtMem(d.MemoryUsage);
+    const asfKb = Number(d.MemoryUsage || 0);
+    $('#sys-mem').textContent = fmtMem(asfKb);
+    await refreshAppStats(asfKb);
     $('#sys-up').textContent = fmtUptime(d.ProcessStartTime || d.StartTime);
     $('#sys-ver').textContent = d.Version ? ('v' + (d.Version.Major !== undefined ?
       `${d.Version.Major}.${d.Version.Minor}.${d.Version.Build}` : d.Version)) : '—';
-  } catch (e) {  }
+  } catch (e) {
+    await refreshAppStats(0);
+  }
 }
 
 async function refreshBots() {
@@ -474,6 +541,8 @@ async function refreshBots() {
   const bots = r && r.Result ? r.Result : {};
   renderBots(bots);
   checkRequiredInput(bots);
+  maybeStartHourFarmOnLaunch(bots);
+  maybeAutoHourFarmAfterCards(bots);
 }
 
 const INPUT_TYPES = {
@@ -564,6 +633,20 @@ async function sendGuard() {
 }
 
 let _boosting = false;
+let AUTO_HOUR_FARM = localStorage.getItem('asf_auto_hour_farm_after_cards') === '1';
+let START_HOUR_FARM = localStorage.getItem('asf_start_hour_farm_on_launch') === '1';
+let _startupHourDone = false;
+let _autoHourInitialized = false;
+const _autoHourSeenCardWork = new Set();
+const _autoHourBoosted = new Set();
+
+function hasCardWork(bot) {
+  if (!bot || !bot.KeepRunning || !bot.IsConnectedAndLoggedOn) return false;
+  const cf = bot.CardsFarmer || {};
+  return !!(cf.NowFarming ||
+    (Array.isArray(cf.CurrentGamesFarming) && cf.CurrentGamesFarming.length > 0) ||
+    (Array.isArray(cf.GamesToFarm) && cf.GamesToFarm.length > 0));
+}
 
 function isFarmedIdle(bot) {
   if (!bot.KeepRunning || !bot.IsConnectedAndLoggedOn) return false;
@@ -578,7 +661,7 @@ async function fetchGames(steamid) {
   return g || {};
 }
 
-async function boostHours() {
+async function boostHours(options = {}) {
   if (_boosting) return;
   _boosting = true;
   const fab = $('#boost-fab');
@@ -586,7 +669,8 @@ async function boostHours() {
   try {
     const r = await api('/Api/Bot/ASF');
     const bots = r && r.Result ? r.Result : {};
-    const targets = Object.keys(bots).filter(n => isFarmedIdle(bots[n]));
+    const only = options.targets ? new Set(options.targets) : null;
+    const targets = Object.keys(bots).filter(n => isFarmedIdle(bots[n]) && (!only || only.has(n)));
     if (!targets.length) {
       toast('Нет аккаунтов с отфармленными карточками', 'err');
       logEvent('Буст часов: подходящих аккаунтов нет.');
@@ -641,6 +725,50 @@ async function boostHours() {
   }
 }
 
+function maybeStartHourFarmOnLaunch(bots) {
+  if (!START_HOUR_FARM || _startupHourDone || _boosting || !bots) return;
+  _startupHourDone = true;
+  const targets = Object.keys(bots).filter(n => isFarmedIdle(bots[n]));
+  if (!targets.length) {
+    logEvent('Фарм часов при запуске: подходящих аккаунтов нет.');
+    return;
+  }
+  targets.forEach(n => _autoHourBoosted.add(n));
+  logEvent('Фарм часов при запуске: аккаунтов ' + targets.length);
+  setTimeout(() => boostHours({ targets, startup: true }), 700);
+}
+
+function maybeAutoHourFarmAfterCards(bots) {
+  if (!AUTO_HOUR_FARM || _boosting || !bots) return;
+  const names = Object.keys(bots);
+
+  // First pass only arms the automation. BetterASF will not start hour boosting
+  // immediately on startup if accounts were already farmed before UI launch.
+  if (!_autoHourInitialized) {
+    for (const n of names) {
+      if (hasCardWork(bots[n])) _autoHourSeenCardWork.add(n);
+      else if (isFarmedIdle(bots[n])) _autoHourBoosted.add(n);
+    }
+    _autoHourInitialized = true;
+    return;
+  }
+
+  for (const n of names) {
+    if (hasCardWork(bots[n])) {
+      _autoHourSeenCardWork.add(n);
+      _autoHourBoosted.delete(n);
+    }
+  }
+
+  const ready = names.filter(n => isFarmedIdle(bots[n]) && _autoHourSeenCardWork.has(n) && !_autoHourBoosted.has(n));
+  if (!ready.length) return;
+
+  ready.forEach(n => _autoHourBoosted.add(n));
+  logEvent('Автофарм часов: обычный фарм закончился для ' + ready.join(', '));
+  toast('Обычный фарм завершён, запускаю фарм часов', 'ok');
+  setTimeout(() => boostHours({ targets: ready, auto: true }), 500);
+}
+
 function openApiKeyModal() {
   $('#apikey-input').value = '';
   $('#apikey-modal').classList.add('show');
@@ -651,7 +779,10 @@ async function saveApiKey() {
   const key = $('#apikey-input').value.trim();
   if (!/^[A-Fa-f0-9]{32}$/.test(key)) { toast('Ключ должен быть 32 hex-символа', 'err'); return; }
   const a = bridge();
-  if (a && a.set_api_key) { try { await a.set_api_key(key); } catch (e) {} }
+  try {
+    if (a && a.set_api_key) await a.set_api_key(key);
+    else await localSettings({ steam_api_key: key });
+  } catch (e) { toast('Не удалось сохранить ключ: ' + e.message, 'err'); return; }
   toast('Ключ сохранён', 'ok');
   closeApiKeyModal();
   setTimeout(boostHours, 400);
@@ -763,6 +894,137 @@ function applyFullTheme(t) {
 
 function bridge() { return (window.pywebview && window.pywebview.api) ? window.pywebview.api : null; }
 
+async function localSettings(patch) {
+  const opts = patch === undefined
+    ? { method: 'GET', cache: 'no-store' }
+    : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) };
+  const r = await fetch('/__settings', opts);
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || d.ok === false) throw new Error(d.message || ('HTTP ' + r.status));
+  return d;
+}
+
+function setRefreshInterval() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  pollTimer = setInterval(refresh, ECONOMY_MODE ? 15000 : 5000);
+}
+
+function applyEconomyMode(enabled, rerender = true) {
+  ECONOMY_MODE = !!enabled;
+  document.documentElement.setAttribute('data-economy', ECONOMY_MODE ? '1' : '0');
+  localStorage.setItem('asf_economy_mode', ECONOMY_MODE ? '1' : '0');
+  const toggle = $('#set-economy-mode');
+  if (toggle) toggle.checked = ECONOMY_MODE;
+  setRefreshInterval();
+  if (rerender && BOTS) renderBots(BOTS);
+}
+
+async function loadAppSettings() {
+  const a = bridge();
+  let st = {};
+  if (a && a.get_settings) {
+    try { st = await a.get_settings(); } catch (e) {}
+  } else {
+    try { st = await localSettings(); } catch (e) {}
+  }
+  const tray = $('#set-minimize-tray');
+  const auto = $('#set-autostart');
+  const autoHour = $('#set-auto-hour-farm');
+  const startHour = $('#set-start-hour-farm');
+  const launchMin = $('#set-launch-minimized');
+  if (tray) tray.checked = !!st.minimize_to_tray;
+  if (auto) auto.checked = !!st.autostart;
+  if (autoHour) {
+    AUTO_HOUR_FARM = !!st.auto_hour_farm_after_cards;
+    autoHour.checked = AUTO_HOUR_FARM;
+    localStorage.setItem('asf_auto_hour_farm_after_cards', AUTO_HOUR_FARM ? '1' : '0');
+  }
+  if (startHour) {
+    START_HOUR_FARM = !!st.start_hour_farm_on_launch;
+    startHour.checked = START_HOUR_FARM;
+    localStorage.setItem('asf_start_hour_farm_on_launch', START_HOUR_FARM ? '1' : '0');
+  }
+  if (launchMin) launchMin.checked = !!st.launch_minimized;
+  if (Object.prototype.hasOwnProperty.call(st, 'economy_mode')) {
+    applyEconomyMode(!!st.economy_mode, true);
+  }
+}
+
+async function saveAppSetting(key, value) {
+  const a = bridge();
+  try {
+    let ok = true;
+    if (a && a.set_app_setting) {
+      ok = await a.set_app_setting(key, !!value);
+    } else {
+      const r = await localSettings({ [key]: !!value });
+      ok = r.ok !== false;
+    }
+    if (ok && key === 'economy_mode') applyEconomyMode(!!value, true);
+    toast(ok ? 'Настройка сохранена' : 'Не удалось применить настройку', ok ? 'ok' : 'err');
+    return !!ok;
+  } catch (e) {
+    toast('Ошибка настройки: ' + e.message, 'err');
+    return false;
+  }
+}
+
+async function runAsfActionButton(btn, command, label) {
+  btn.disabled = true;
+  btn.classList.add('busy');
+  try {
+    await api('/Api/Command', { method: 'POST', body: JSON.stringify({ Command: command }) });
+    toast(label + ': команда отправлена', 'ok');
+    logEvent(label + ': команда ASF "' + command + '" отправлена.');
+  } catch (e) {
+    toast(label + ': ' + e.message, 'err');
+    logEvent(label + ': ошибка (' + e.message + ')');
+  } finally {
+    setTimeout(() => { btn.disabled = false; btn.classList.remove('busy'); }, 900);
+  }
+}
+
+function initContextMenu() {
+  const menu = $('#context-menu');
+  if (!menu) return;
+  const hide = () => { menu.classList.remove('show'); menu.setAttribute('aria-hidden', 'true'); };
+  document.addEventListener('click', hide);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') hide(); });
+  document.addEventListener('scroll', hide, true);
+
+  document.addEventListener('contextmenu', e => {
+    const card = e.target.closest('.bot-card[data-bot]');
+    if (!card || card.classList.contains('is-add')) return;
+    e.preventDefault();
+    const name = card.getAttribute('data-bot');
+    const bot = BOTS[name] || {};
+    const running = !!bot.KeepRunning;
+    const paused = isPaused(bot);
+    const items = [
+      { label: 'Настройки бота', act: 'edit' },
+      { label: running ? 'Остановить бота' : 'Запустить бота', act: running ? 'stop' : 'start' },
+    ];
+    if (running) items.push({ label: paused ? 'Продолжить фарм' : 'Пауза фарма', act: paused ? 'resume' : 'pause' });
+    menu.innerHTML = `<div class="context-title">${escapeHtml(name)}</div>` +
+      items.map(it => `<button class="context-item" data-act="${it.act}" data-bot="${escapeHtml(name)}">${it.label}</button>`).join('');
+    menu.querySelectorAll('.context-item').forEach(btn => btn.onclick = async ev => {
+      ev.stopPropagation();
+      hide();
+      const act = btn.getAttribute('data-act');
+      if (act === 'edit') return editBot(name);
+      if (act === 'start') return startBot(name);
+      if (act === 'stop') return stopBot(name);
+      if (act === 'pause') return pauseBot(name);
+      if (act === 'resume') return resumeBot(name);
+    });
+    const pad = 8;
+    menu.style.left = Math.min(e.clientX, window.innerWidth - 230 - pad) + 'px';
+    menu.style.top = Math.min(e.clientY, window.innerHeight - menu.offsetHeight - pad) + 'px';
+    menu.classList.add('show');
+    menu.setAttribute('aria-hidden', 'false');
+  });
+}
+
 function init() {
   if (CFG.appName) {
     document.title = CFG.appName;
@@ -778,6 +1040,7 @@ function init() {
   
   const initialTheme = localStorage.getItem('asf_full_theme') || CFG.theme || localStorage.getItem('asf_theme') || 'dark';
   applyFullTheme(initialTheme);
+  applyEconomyMode(ECONOMY_MODE, false);
   
   const themeBtn = $('#themeBtn');
   if (themeBtn) {
@@ -807,6 +1070,58 @@ function init() {
       applyFullTheme(e.target.value);
     };
   }
+
+  loadAppSettings();
+  const trayToggle = $('#set-minimize-tray');
+  if (trayToggle) trayToggle.onchange = e => saveAppSetting('minimize_to_tray', e.target.checked);
+  const autoToggle = $('#set-autostart');
+  if (autoToggle) autoToggle.onchange = async e => {
+    const ok = await saveAppSetting('autostart', e.target.checked);
+    if (!ok) e.target.checked = !e.target.checked;
+  };
+  const economyToggle = $('#set-economy-mode');
+  if (economyToggle) economyToggle.onchange = async e => {
+    const prev = ECONOMY_MODE;
+    applyEconomyMode(e.target.checked, true);
+    const ok = await saveAppSetting('economy_mode', e.target.checked);
+    if (!ok) applyEconomyMode(prev, true);
+  };
+  const autoHourToggle = $('#set-auto-hour-farm');
+  if (autoHourToggle) autoHourToggle.onchange = async e => {
+    const prev = AUTO_HOUR_FARM;
+    AUTO_HOUR_FARM = !!e.target.checked;
+    localStorage.setItem('asf_auto_hour_farm_after_cards', AUTO_HOUR_FARM ? '1' : '0');
+    _autoHourInitialized = false;
+    const ok = await saveAppSetting('auto_hour_farm_after_cards', AUTO_HOUR_FARM);
+    if (!ok) {
+      AUTO_HOUR_FARM = prev;
+      e.target.checked = prev;
+      localStorage.setItem('asf_auto_hour_farm_after_cards', prev ? '1' : '0');
+    }
+  };
+  const startHourToggle = $('#set-start-hour-farm');
+  if (startHourToggle) startHourToggle.onchange = async e => {
+    const prev = START_HOUR_FARM;
+    START_HOUR_FARM = !!e.target.checked;
+    _startupHourDone = false;
+    localStorage.setItem('asf_start_hour_farm_on_launch', START_HOUR_FARM ? '1' : '0');
+    const ok = await saveAppSetting('start_hour_farm_on_launch', START_HOUR_FARM);
+    if (!ok) {
+      START_HOUR_FARM = prev;
+      e.target.checked = prev;
+      localStorage.setItem('asf_start_hour_farm_on_launch', prev ? '1' : '0');
+    }
+  };
+  const launchMinToggle = $('#set-launch-minimized');
+  if (launchMinToggle) launchMinToggle.onchange = async e => {
+    const ok = await saveAppSetting('launch_minimized', e.target.checked);
+    if (!ok) e.target.checked = !e.target.checked;
+  };
+  const restartBtn = $('#asf-restart-action');
+  if (restartBtn) restartBtn.onclick = e => runAsfActionButton(e.currentTarget, 'restart', 'Перезагрузка ASF');
+  const updateBtn = $('#asf-update-action');
+  if (updateBtn) updateBtn.onclick = e => runAsfActionButton(e.currentTarget, 'update', 'Проверка обновления ASF');
+  initContextMenu();
 
   $('#minBtn').onclick = () => { const a = bridge(); if (a) a.minimize(); };
   $('#maxBtn').onclick = () => { const a = bridge(); if (a) a.toggle_maximize(); };
@@ -854,8 +1169,10 @@ function init() {
     if (h.good_host) logEvent('Рабочий хост ASF: ' + h.good_host);
   }).catch(() => logEvent('Прокси /__health не ответил.'));
 
+  setTimeout(() => checkBetterASFUpdate(false), 1800);
+
   refresh();
-  pollTimer = setInterval(refresh, 5000);
+  setRefreshInterval();
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

@@ -9,7 +9,7 @@
 <body>
 
 <script>
-// Мокаем fetch, чтобы интерфейс показал демо-данные без запущенного ASF.
+// Mock fetch so the UI can show demo data without a running ASF instance.
 window.ASF_CONFIG = { apiBase: "", password: "", theme: "dark" };
 const MOCK = {
   "/Api/Bot/ASF": { Result: {
@@ -42,7 +42,7 @@ window.fetch = async (url, opts={}) => {
 };
 </script>
 <script>
-// Вставим разметку из index.html инлайном через fetch исходного файла:
+// Insert markup from index.html inline by fetching the source file:
 fetch('index.html').then(r=>r.text()).then(html=>{
   const m = html.match(/<body>([\s\S]*?)<script src="app.js"/);
   if (m){ document.body.insertAdjacentHTML('afterbegin', m[1]); }
