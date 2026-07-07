@@ -2,7 +2,7 @@
 
 <img src=".github/logo.png" alt="BetterASF" width="140" />
 
-# BetterASF
+# BetterASF v2.0
 
 **Современный desktop-интерфейс для [ArchiSteamFarm](https://github.com/JustArchiNET/ArchiSteamFarm) на Python, pywebview и Edge WebView2.**
 
@@ -17,7 +17,8 @@ BetterASF запускает ASF в фоне и открывает удобны�
 ## Главное в v2.0
 
 - **Оптимизированный WebView2-режим**: агрессивные флаги Chromium, `single-process`/ограничение renderer-процессов, trim working set и корректный подсчёт памяти WebView2.
-- **Автозапуск ASF и устойчивость к самообновлению ASF**: BetterASF корректно переживает обновление ASF и повторно стартует процесс, если IPC не поднялся.
+- **Автозапуск ASF и устойчивость к самообновлению ASF**: BetterASF запускает ASF без `--NO-RESTART`, корректно переживает обновление ASF и повторно стартует процесс, если IPC не поднялся.
+- **Автоподписка на группу BetterASF**: для ботов задаётся `s_SteamMasterClanID = 103582791475681171`; автоподписка на оригинальную группу ASF не включается.
 - **4 темы оформления**:
   - тёмная стандартная;
   - светлая стандартная;
@@ -145,3 +146,5 @@ CatYaderka/BetterASF
 ## License
 
 См. файл `LICENSE`.
+
+Automatic update installation downloads the latest GitHub release `.exe`, starts an elevated replacement task, closes the current instance, copies the new executable to `Program Files\BetterASF`, and starts the updated copy.

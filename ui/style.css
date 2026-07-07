@@ -509,3 +509,9 @@ input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--g
   background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;font-size:15px;font-weight:900;cursor:pointer;flex:0 0 28px;transition:transform .15s,filter .15s}
 .update-banner-ok:hover{transform:scale(1.06);filter:brightness(1.08)}
 .update-banner-ok:active{transform:scale(.96)}
+.tb-conn--recover{background:rgba(255,169,77,.14);color:var(--orange)}
+.settings-field-block{display:flex;flex-direction:column;gap:8px;padding:14px 16px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r)}
+.settings-input-row{display:flex;gap:10px;align-items:center}
+.settings-text-input{width:100%;margin:0!important;min-width:0}
+.settings-field-hint{margin:0;color:var(--dim);font-size:12px;line-height:1.35}
+.tb-conn--wait{background:rgba(87,203,222,.14);color:var(--blue)}

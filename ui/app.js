@@ -38,6 +38,22 @@ function hideUpdateBanner(id = '') {
   if (id) localStorage.setItem('betterasf_update_dismissed', id);
 }
 
+async function installBetterASFUpdate(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Загрузка…'; }
+  try {
+    const r = await fetch('/__install_update', { method: 'POST', cache: 'no-store' });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok) throw new Error(d.message || ('HTTP ' + r.status));
+    toast('Обновление загружено, BetterASF перезапустится', 'ok');
+    logEvent('Updater: ' + (d.message || 'update started'));
+    hideUpdateBanner();
+  } catch (e) {
+    toast('Не удалось обновить: ' + e.message, 'err');
+    logEvent('Updater error: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = 'Обновить'; }
+  }
+}
+
 async function checkBetterASFUpdate(manual = false) {
   try {
     const r = await fetch('/__check_update', { cache: 'no-store' });
@@ -59,8 +75,9 @@ async function checkBetterASFUpdate(manual = false) {
     const ok = $('#update-banner-ok');
     if (!b || !text || !link || !ok) return;
     text.textContent = d.message || 'Доступно обновление BetterASF';
-    link.textContent = d.downloadUrl ? 'Скачать' : 'GitHub';
-    link.onclick = () => { const u = d.downloadUrl || d.url; if (u) window.open(u, '_blank'); };
+    link.textContent = 'Обновить';
+    link.onclick = () => installBetterASFUpdate(link);
+    ok.textContent = '×';
     ok.onclick = () => hideUpdateBanner(updateId);
     b.classList.add('show');
     b.setAttribute('aria-hidden', 'false');
@@ -74,6 +91,25 @@ function setConn(ok) {
   const c = $('#conn');
   if (ok) { c.textContent = 'подключено'; c.className = 'tb-conn tb-conn--on'; }
   else { c.textContent = 'нет связи'; c.className = 'tb-conn tb-conn--off'; }
+}
+
+function setConnRecovering() {
+  const c = $('#conn');
+  if (!c) return;
+  c.textContent = 'восстановление';
+  c.className = 'tb-conn tb-conn--recover';
+}
+
+function setConnStarting() {
+  const c = $('#conn');
+  if (!c) return;
+  c.textContent = 'запуск ASF';
+  c.className = 'tb-conn tb-conn--wait';
+}
+
+async function getAppState() {
+  const r = await fetch('/__appstate', { cache: 'no-store' });
+  return await r.json();
 }
 
 async function rawFetch(base, path, opts, headers) {
@@ -635,6 +671,7 @@ async function sendGuard() {
 let _boosting = false;
 let AUTO_HOUR_FARM = localStorage.getItem('asf_auto_hour_farm_after_cards') === '1';
 let START_HOUR_FARM = localStorage.getItem('asf_start_hour_farm_on_launch') === '1';
+let PRIORITY_HOUR_APPIDS = localStorage.getItem('asf_priority_hour_farm_appids') || '';
 let _startupHourDone = false;
 let _autoHourInitialized = false;
 const _autoHourSeenCardWork = new Set();
@@ -656,8 +693,26 @@ function isFarmedIdle(bot) {
   return !farming && toFarm === 0;
 }
 
-async function fetchGames(steamid) {
-  const g = await api('/__games?steamid=' + steamid + '&limit=32', { timeout: 20000 });
+function parseAppIDsText(text) {
+  const seen = new Set();
+  const out = [];
+  String(text || '').split(/[^0-9]+/).forEach(x => {
+    if (!x) return;
+    const id = parseInt(x, 10);
+    if (Number.isFinite(id) && id > 0 && !seen.has(id)) {
+      seen.add(id);
+      out.push(id);
+    }
+  });
+  return out;
+}
+
+function normalizeAppIDsText(text) {
+  return parseAppIDsText(text).join(', ');
+}
+
+async function fetchGames(steamid, limit = 32) {
+  const g = await api('/__games?steamid=' + steamid + '&limit=' + encodeURIComponent(String(limit)), { timeout: 20000 });
   return g || {};
 }
 
@@ -677,12 +732,26 @@ async function boostHours(options = {}) {
       return;
     }
     logEvent('Буст часов: аккаунтов ' + targets.length);
-    let done = 0, needKey = false;
+
+    const priorityInput = $('#set-priority-hour-games');
+    if (priorityInput) {
+      PRIORITY_HOUR_APPIDS = normalizeAppIDsText(priorityInput.value || PRIORITY_HOUR_APPIDS);
+      priorityInput.value = PRIORITY_HOUR_APPIDS;
+      localStorage.setItem('asf_priority_hour_farm_appids', PRIORITY_HOUR_APPIDS);
+      localSettings({ priority_hour_farm_appids: PRIORITY_HOUR_APPIDS }).catch(() => {});
+    }
+    const priority = parseAppIDsText(PRIORITY_HOUR_APPIDS);
+    if (priority.length) logEvent('Буст часов: приоритетные AppID: ' + priority.join(', '));
+
+    let needKey = false;
+    const ownedByBot = {};
+    const ownedSetByBot = {};
+
     for (const name of targets) {
       const sid = bots[name].s_SteamID || (bots[name].SteamID != null ? String(bots[name].SteamID) : '');
       if (!sid || sid === '0') { logEvent(name + ': нет SteamID, пропуск'); continue; }
       let res = {};
-      try { res = await fetchGames(sid); }
+      try { res = await fetchGames(sid, priority.length ? 50000 : 32); }
       catch (e) { logEvent(name + ': ошибка запроса игр (' + e.message + ')'); continue; }
 
       if (res.needKey || res.error === 'bad_key' || res.error === 'no_api_key') { needKey = true; break; }
@@ -694,19 +763,13 @@ async function boostHours(options = {}) {
         logEvent(name + ': ' + (res.message || res.error) + ' — пропуск');
         continue;
       }
-      const games = (res.games || []).map(x => x.appID);
+      const games = (res.games || []).map(x => x.appID).filter(Boolean);
       if (!games.length) {
         logEvent(name + ': в библиотеке нет игр, пропуск');
         continue;
       }
-      try {
-        await api('/Api/Command', {
-          method: 'POST',
-          body: JSON.stringify({ Command: 'play ' + name + ' ' + games.join(',') }),
-        });
-        done++;
-        logEvent(name + ': запущено ' + games.length + ' игр (топ по часам)');
-      } catch (e) { logEvent(name + ': ошибка play (' + e.message + ')'); }
+      ownedByBot[name] = games;
+      ownedSetByBot[name] = new Set(games);
     }
 
     if (needKey) {
@@ -715,6 +778,47 @@ async function boostHours(options = {}) {
       openApiKeyModal();
       return;
     }
+
+    const usableTargets = targets.filter(n => ownedByBot[n]);
+    if (!usableTargets.length) {
+      toast('Игры не найдены ни на одном аккаунте', 'err');
+      return;
+    }
+
+    let done = 0;
+    for (const name of usableTargets) {
+      // Priority AppIDs apply to every account independently:
+      // if the account owns 3 priority games, start all 3; if it owns 2, start those 2.
+      const ownedSet = ownedSetByBot[name];
+      const priorityOwned = priority.filter(appid => ownedSet.has(appid)).slice(0, 32);
+      const selected = [...priorityOwned];
+      const selectedSet = new Set(selected);
+
+      for (const appid of ownedByBot[name]) {
+        if (selected.length >= 32) break;
+        if (selectedSet.has(appid)) continue;
+        selected.push(appid);
+        selectedSet.add(appid);
+      }
+
+      if (!selected.length) {
+        logEvent(name + ': нет игр для запуска, пропуск');
+        continue;
+      }
+      try {
+        await api('/Api/Command', {
+          method: 'POST',
+          body: JSON.stringify({ Command: 'play ' + name + ' ' + selected.join(',') }),
+        });
+        done++;
+        if (priority.length) {
+          const missing = priority.filter(appid => !ownedSet.has(appid));
+          if (missing.length) logEvent(name + ': нет приоритетных игр ' + missing.join(', ') + ' — пропуск для этого аккаунта');
+        }
+        logEvent(name + ': запущено ' + selected.length + ' игр' + (priorityOwned.length ? ' (приоритетных: ' + priorityOwned.length + ')' : ''));
+      } catch (e) { logEvent(name + ': ошибка play (' + e.message + ')'); }
+    }
+
     toast(done ? ('Запущено на ' + done + ' акк.') : 'Игры не запущены (см. Журнал)', done ? 'ok' : 'err');
   } catch (e) {
     toast(e.message, 'err');
@@ -794,16 +898,52 @@ async function refresh() {
   if (_refreshing) return;
   _refreshing = true;
   try {
+    const st = await getAppState().catch(() => null);
+    if (st && st.asf_status && st.asf_status !== 'online') {
+      if (st.asf_status === 'recovering') {
+        setConnRecovering();
+        if (_wasConnected !== 'recovering') {
+          logEvent('ASF восстанавливается: ' + (st.asf_status_message || 'ожидание'));
+          _wasConnected = 'recovering';
+        }
+      } else if (st.asf_status === 'starting') {
+        setConnStarting();
+        if (_wasConnected !== 'starting') {
+          logEvent('ASF запускается в фоне. Интерфейс уже доступен.');
+          _wasConnected = 'starting';
+        }
+      } else {
+        setConn(false);
+      }
+      await refreshAppStats(0);
+      return;
+    }
+
     await refreshBots();
     await refreshASF();
     setConn(true);
     if (_wasConnected !== true) { logEvent('Связь с ASF установлена.'); _wasConnected = true; }
   } catch (e) {
-    setConn(false);
-    if (_wasConnected !== false &&
-        !String(e.message).includes('401') && !String(e.message).includes('abort')) {
-      logEvent('Нет связи с ASF (ожидание запуска): ' + e.message);
-      _wasConnected = false;
+    const st = await getAppState().catch(() => null);
+    if (st && st.asf_status === 'recovering') {
+      setConnRecovering();
+      if (_wasConnected !== 'recovering') {
+        logEvent('ASF восстанавливается: ' + (st.asf_status_message || e.message));
+        _wasConnected = 'recovering';
+      }
+    } else if (st && st.asf_status === 'starting') {
+      setConnStarting();
+      if (_wasConnected !== 'starting') {
+        logEvent('ASF запускается в фоне.');
+        _wasConnected = 'starting';
+      }
+    } else {
+      setConn(false);
+      if (_wasConnected !== false &&
+          !String(e.message).includes('401') && !String(e.message).includes('abort')) {
+        logEvent('Нет связи с ASF (ожидание запуска): ' + e.message);
+        _wasConnected = false;
+      }
     }
   } finally {
     _refreshing = false;
@@ -931,6 +1071,7 @@ async function loadAppSettings() {
   const auto = $('#set-autostart');
   const autoHour = $('#set-auto-hour-farm');
   const startHour = $('#set-start-hour-farm');
+  const priorityInput = $('#set-priority-hour-games');
   const launchMin = $('#set-launch-minimized');
   if (tray) tray.checked = !!st.minimize_to_tray;
   if (auto) auto.checked = !!st.autostart;
@@ -943,6 +1084,12 @@ async function loadAppSettings() {
     START_HOUR_FARM = !!st.start_hour_farm_on_launch;
     startHour.checked = START_HOUR_FARM;
     localStorage.setItem('asf_start_hour_farm_on_launch', START_HOUR_FARM ? '1' : '0');
+  }
+  if (priorityInput) {
+    PRIORITY_HOUR_APPIDS = st.priority_hour_farm_appids || localStorage.getItem('asf_priority_hour_farm_appids') || '';
+    PRIORITY_HOUR_APPIDS = normalizeAppIDsText(PRIORITY_HOUR_APPIDS);
+    priorityInput.value = PRIORITY_HOUR_APPIDS;
+    localStorage.setItem('asf_priority_hour_farm_appids', PRIORITY_HOUR_APPIDS);
   }
   if (launchMin) launchMin.checked = !!st.launch_minimized;
   if (Object.prototype.hasOwnProperty.call(st, 'economy_mode')) {
@@ -965,6 +1112,24 @@ async function saveAppSetting(key, value) {
     return !!ok;
   } catch (e) {
     toast('Ошибка настройки: ' + e.message, 'err');
+    return false;
+  }
+}
+
+async function savePriorityHourGames() {
+  const input = $('#set-priority-hour-games');
+  if (!input) return true;
+  const normalized = normalizeAppIDsText(input.value);
+  input.value = normalized;
+  PRIORITY_HOUR_APPIDS = normalized;
+  localStorage.setItem('asf_priority_hour_farm_appids', normalized);
+  try {
+    const r = await localSettings({ priority_hour_farm_appids: normalized });
+    const ok = r.ok !== false;
+    toast(ok ? 'Приоритетные игры сохранены' : 'Не удалось сохранить AppID', ok ? 'ok' : 'err');
+    return ok;
+  } catch (e) {
+    toast('Ошибка сохранения AppID: ' + e.message, 'err');
     return false;
   }
 }
@@ -1112,6 +1277,13 @@ function init() {
       localStorage.setItem('asf_start_hour_farm_on_launch', prev ? '1' : '0');
     }
   };
+  const priorityInput = $('#set-priority-hour-games');
+  const prioritySave = $('#save-priority-hour-games');
+  if (prioritySave) prioritySave.onclick = savePriorityHourGames;
+  if (priorityInput) {
+    priorityInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); savePriorityHourGames(); } });
+    priorityInput.addEventListener('blur', () => { if (priorityInput.value !== PRIORITY_HOUR_APPIDS) savePriorityHourGames(); });
+  }
   const launchMinToggle = $('#set-launch-minimized');
   if (launchMinToggle) launchMinToggle.onchange = async e => {
     const ok = await saveAppSetting('launch_minimized', e.target.checked);
@@ -1164,14 +1336,19 @@ function init() {
 
   logEvent('Интерфейс запущен. База API: "' + API_BASE + '" (прокси)');
 
-  fetch('/__health').then(r => r.json()).then(h => {
-    logEvent('Диагностика связи: ' + JSON.stringify(h.hosts));
-    if (h.good_host) logEvent('Рабочий хост ASF: ' + h.good_host);
-  }).catch(() => logEvent('Прокси /__health не ответил.'));
+  setConnStarting();
+  logEvent('Интерфейс готов. ASF запускается в фоне.');
 
-  setTimeout(() => checkBetterASFUpdate(false), 1800);
+  setTimeout(() => {
+    fetch('/__health').then(r => r.json()).then(h => {
+      logEvent('Диагностика связи: ' + JSON.stringify(h.hosts));
+      if (h.good_host) logEvent('Рабочий хост ASF: ' + h.good_host);
+    }).catch(() => logEvent('Прокси /__health не ответил.'));
+  }, 6000);
 
-  refresh();
+  setTimeout(() => checkBetterASFUpdate(false), 2500);
+
+  setTimeout(refresh, 300);
   setRefreshInterval();
 }
 

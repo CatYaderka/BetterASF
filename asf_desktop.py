@@ -23,7 +23,7 @@ APP_VERSION = "2.0"
 GITHUB_REPO = "CatYaderka/BetterASF"
 
 _LOG_PATH = None
-RUNTIME = {"steam_api_key": ""}
+RUNTIME = {"steam_api_key": "", "asf_status": "starting", "asf_status_message": ""}
 
 
 def _set_log_path(p):
@@ -449,6 +449,31 @@ def extract_embedded_asf():
     link_external_config(runtime)
     runtime_exe = runtime_exe_path()
     return str(runtime_exe) if runtime_exe.exists() else None
+
+
+def reset_embedded_asf_runtime():
+    embedded = RES_DIR / "_asf"
+    runtime = DATA_DIR / "ASF-runtime"
+    if not embedded.exists():
+        log("ASF recovery: embedded ASF is not available, runtime reset skipped.")
+        return False
+    try:
+        import shutil
+        if runtime.exists() or os.path.lexists(str(runtime)):
+            log(f"ASF recovery: removing broken runtime {runtime}")
+            shutil.rmtree(str(runtime), ignore_errors=True)
+            if os.path.lexists(str(runtime)):
+                try:
+                    os.rmdir(str(runtime))
+                except Exception:
+                    if os.name == "nt":
+                        subprocess.run(["cmd", "/c", "rd", "/s", "/q", str(runtime)],
+                                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                                       check=False)
+        return True
+    except Exception as e:
+        log(f"ASF recovery: runtime cleanup failed: {e}")
+        return False
 
 
 def link_external_config(runtime):
@@ -1096,6 +1121,116 @@ def check_github_update():
     return result
 
 
+def _download_file(url, target):
+    headers = {"User-Agent": f"{APP_NAME}/{APP_VERSION}"}
+    req = urllib.request.Request(url, headers=headers)
+    with urllib.request.urlopen(req, timeout=60) as r:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        tmp = target.with_suffix(target.suffix + ".part")
+        with open(tmp, "wb") as f:
+            while True:
+                chunk = r.read(1024 * 256)
+                if not chunk:
+                    break
+                f.write(chunk)
+        try:
+            tmp.replace(target)
+        except Exception:
+            if target.exists():
+                target.unlink()
+            tmp.rename(target)
+    return target
+
+
+def install_github_update(exit_callback=None):
+    """Download the latest BetterASF exe and replace the installed copy after current process exits."""
+    info = check_github_update()
+    if not info.get("ok"):
+        return {"ok": False, "message": info.get("message") or "Update check failed."}
+    if not info.get("update"):
+        return {"ok": False, "message": "No newer BetterASF release is available."}
+
+    url = info.get("downloadUrl") or info.get("url")
+    if not url:
+        return {"ok": False, "message": "GitHub release does not provide a downloadable asset."}
+    if ".exe" not in url.lower().split("?")[0]:
+        return {
+            "ok": False,
+            "message": "The latest release asset is not an .exe file. Open GitHub and update manually.",
+            "url": info.get("url"),
+            "downloadUrl": url,
+        }
+
+    try:
+        version = _normalize_version(info.get("latestVersion") or "latest") or "latest"
+        updates_dir = DATA_DIR / "updates"
+        downloaded = updates_dir / f"BetterASF-{version}.exe"
+        log(f"Updater: downloading {url} -> {downloaded}")
+        _download_file(url, downloaded)
+
+        if os.name != "nt":
+            return {"ok": False, "message": "Automatic replacement is supported only on Windows.", "downloaded": str(downloaded)}
+
+        pf = os.environ.get("ProgramFiles") or os.environ.get("PROGRAMFILES")
+        if not pf:
+            return {"ok": False, "message": "ProgramFiles environment variable is missing.", "downloaded": str(downloaded)}
+        install_dir = Path(pf) / APP_NAME
+        dst = install_dir / f"{APP_NAME}.exe"
+        update_log = DATA_DIR / "update.log"
+
+        import base64
+        ps = f"""
+$ErrorActionPreference = 'Stop'
+$src = {_ps_quote(downloaded)}
+$dstDir = {_ps_quote(install_dir)}
+$dst = {_ps_quote(dst)}
+$oldPid = {os.getpid()}
+$log = {_ps_quote(update_log)}
+function Log($m) {{
+    try {{
+        $dir = Split-Path -Parent $log
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+        Add-Content -LiteralPath $log -Encoding UTF8 -Value ((Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + ' ' + $m)
+    }} catch {{}}
+}}
+try {{
+    Log 'Update install started.'
+    Log ('Downloaded exe: ' + $src)
+    Log ('Target exe: ' + $dst)
+    New-Item -ItemType Directory -Force -Path $dstDir | Out-Null
+    try {{ Wait-Process -Id $oldPid -Timeout 60 -ErrorAction SilentlyContinue }} catch {{}}
+    Start-Sleep -Milliseconds 1200
+    Copy-Item -LiteralPath $src -Destination $dst -Force
+    try {{ Unblock-File -LiteralPath $dst -ErrorAction SilentlyContinue }} catch {{}}
+    Log 'Copy succeeded.'
+    $env:BETTERASF_NO_SELF_INSTALL = '1'
+    Start-Process -FilePath $dst -WorkingDirectory $dstDir
+    Log 'Updated BetterASF started.'
+    Start-Sleep -Milliseconds 1000
+    try {{ Remove-Item -LiteralPath $src -Force -ErrorAction SilentlyContinue }} catch {{}}
+}} catch {{
+    Log ('Fatal: ' + $_.Exception.Message)
+}}
+"""
+        encoded = base64.b64encode(ps.encode("utf-16le")).decode("ascii")
+        params = f'-NoProfile -ExecutionPolicy Bypass -EncodedCommand {encoded}'
+        import ctypes
+        rc = ctypes.windll.shell32.ShellExecuteW(None, "runas", "powershell.exe", params, None, 1)
+        if int(rc) <= 32:
+            return {"ok": False, "message": f"Elevation was not started, ShellExecute={int(rc)}", "downloaded": str(downloaded)}
+
+        log(f"Updater: elevated replacement started, log={update_log}")
+        if exit_callback:
+            try:
+                threading.Timer(0.8, exit_callback).start()
+            except Exception:
+                pass
+        return {"ok": True, "message": "Update downloaded. BetterASF will restart to install it.", "version": version}
+    except Exception as e:
+        log(f"Updater error: {e}")
+        return {"ok": False, "message": str(e)}
+
+
 def make_handler(ui_path, asf_host, asf_port, inject, stats_provider=None, exit_callback=None):
     class Handler(http.server.BaseHTTPRequestHandler):
         timeout = 10
@@ -1232,6 +1367,7 @@ def make_handler(ui_path, asf_host, asf_port, inject, stats_provider=None, exit_
                     "auto_hour_farm_after_cards": bool(data.get("auto_hour_farm_after_cards", False)),
                     "start_hour_farm_on_launch": bool(data.get("start_hour_farm_on_launch", False)),
                     "launch_minimized": bool(data.get("launch_minimized", False)),
+                    "priority_hour_farm_appids": str(data.get("priority_hour_farm_appids", "") or ""),
                     "steam_api_key": bool((RUNTIME.get("steam_api_key") or data.get("steam_api_key") or "").strip()),
                     "ui_mode": inject.get("interfaceMode", "browser"),
                 }
@@ -1252,6 +1388,11 @@ def make_handler(ui_path, asf_host, asf_port, inject, stats_provider=None, exit_
                     set_app_setting(key, bool(value))
                 elif key == "theme" and value in ("dark", "light"):
                     save_theme(value)
+                elif key == "priority_hour_farm_appids":
+                    raw = str(value or "")
+                    # Keep only digits and common separators; UI normalizes the value too.
+                    cleaned = "".join(ch if (ch.isdigit() or ch in ",; \n\t") else " " for ch in raw)
+                    set_app_setting(key, cleaned.strip())
                 elif key == "steam_api_key":
                     val = (value or "").strip()
                     RUNTIME["steam_api_key"] = val
@@ -1332,6 +1473,12 @@ def make_handler(ui_path, asf_host, asf_port, inject, stats_provider=None, exit_
         def do_GET(self):
             if self.path.startswith("/__health"):
                 self._health()
+            elif self.path.startswith("/__appstate"):
+                payload = {
+                    "asf_status": RUNTIME.get("asf_status", "unknown"),
+                    "asf_status_message": RUNTIME.get("asf_status_message", ""),
+                }
+                self._send_bytes(json.dumps(payload).encode(), "application/json")
             elif self.path.startswith("/__check_update"):
                 self._send_bytes(json.dumps(check_github_update()).encode(), "application/json")
             elif self.path.startswith("/__settings"):
@@ -1352,6 +1499,9 @@ def make_handler(ui_path, asf_host, asf_port, inject, stats_provider=None, exit_
         def do_POST(self):
             if self.path.startswith("/__settings"):
                 self._settings()
+            elif self.path.startswith("/__install_update"):
+                result = install_github_update(exit_callback)
+                self._send_bytes(json.dumps(result).encode(), "application/json", 200 if result.get("ok") else 500)
             elif self.path.startswith("/__exit"):
                 self._send_bytes(json.dumps({"ok": True}).encode(), "application/json")
                 if exit_callback:
@@ -1761,6 +1911,7 @@ class Bridge:
             "auto_hour_farm_after_cards": bool(data.get("auto_hour_farm_after_cards", False)),
             "start_hour_farm_on_launch": bool(data.get("start_hour_farm_on_launch", False)),
             "launch_minimized": bool(data.get("launch_minimized", False)),
+            "priority_hour_farm_appids": str(data.get("priority_hour_farm_appids", "") or ""),
         }
 
     def set_app_setting(self, key, value):
@@ -1864,30 +2015,120 @@ def main():
     exit_event = threading.Event()
     start_memory_trim_thread(cfg, asf_holder)
 
-    def launch_asf():
-        if str(cfg["start_asf"]).lower() not in ("1", "true", "yes", "on"):
-            log("start_asf=false -> ASF должен быть запущен отдельно.")
-            return
-        exe = None
-        try:
-            exe = extract_embedded_asf()
-        except Exception as e:
-            log(f"Ошибка распаковки встроенного ASF: {e}")
-        if not exe:
-            exe = find_asf_executable(cfg["asf_path"])
-        if exe:
-            log(f"Найден ASF: {exe}")
-            try:
-                enable_betterasf_group(exe)
-            except Exception as e:
-                log(f"Ошибка настройки подписки на BetterASF: {e}")
-            proc = ASFProcess(exe)
-            proc.start()
-            asf_holder["proc"] = proc
-        else:
-            log("ВНИМАНИЕ: ArchiSteamFarm не найден (ни встроенный, ни рядом).")
+    start_lock = threading.Lock()
 
-    threading.Thread(target=launch_asf, daemon=True).start()
+    def set_asf_status(status, message=""):
+        RUNTIME["asf_status"] = status
+        RUNTIME["asf_status_message"] = message
+
+    def start_asf_process(force_reinstall=False, reason="startup"):
+        if str(cfg["start_asf"]).lower() not in ("1", "true", "yes", "on"):
+            set_asf_status("external", "ASF is expected to be started separately.")
+            log("start_asf=false -> ASF должен быть запущен отдельно.")
+            return None
+        with start_lock:
+            set_asf_status("recovering" if force_reinstall else "starting",
+                           "Restoring ASF runtime..." if force_reinstall else "Starting ASF...")
+            old = asf_holder.get("proc")
+            if force_reinstall and old is not None:
+                try:
+                    old.stop()
+                except Exception:
+                    pass
+                asf_holder["proc"] = None
+            if force_reinstall:
+                reset_embedded_asf_runtime()
+
+            exe = None
+            try:
+                exe = extract_embedded_asf()
+            except Exception as e:
+                log(f"Ошибка распаковки встроенного ASF: {e}")
+            if not exe:
+                exe = find_asf_executable(cfg["asf_path"])
+            if exe:
+                log(f"Найден ASF: {exe}")
+                try:
+                    enable_betterasf_group(exe)
+                except Exception as e:
+                    log(f"Ошибка настройки подписки на BetterASF: {e}")
+                proc = ASFProcess(exe)
+                proc.start()
+                asf_holder["proc"] = proc
+                set_asf_status("starting", f"ASF process started ({reason}).")
+                return proc
+            set_asf_status("offline", "ArchiSteamFarm executable was not found.")
+            log("ВНИМАНИЕ: ArchiSteamFarm не найден (ни встроенный, ни рядом).")
+            return None
+
+    def wait_for_asf_ipc(timeout):
+        deadline = time.time() + timeout
+        last = None
+        while not exit_event.is_set() and time.time() < deadline:
+            ready = ipc_ready(host, port)
+            if ready != last:
+                log(f"IPC {host}:{port} -> {'ДОСТУПЕН' if ready else 'недоступен'}")
+                last = ready
+            if ready:
+                set_asf_status("online", "ASF IPC is available.")
+                log("ASF IPC поднялся. Связь должна работать.")
+                return True
+            proc = asf_holder.get("proc")
+            if proc is not None and not proc.alive():
+                set_asf_status("recovering", "ASF process exited before IPC became available.")
+                return False
+            time.sleep(1.0)
+        if not exit_event.is_set():
+            set_asf_status("recovering", "ASF IPC startup timeout.")
+            log(f"ТАЙМАУТ: IPC {host}:{port} не поднялся за {timeout}с.")
+        return False
+
+    def asf_supervisor():
+        if str(cfg["start_asf"]).lower() not in ("1", "true", "yes", "on"):
+            return
+        timeout = int(cfg["startup_timeout"])
+        start_asf_process(False, "startup")
+        wait_for_asf_ipc(timeout)
+        while not exit_event.is_set():
+            proc = asf_holder.get("proc")
+            if proc is None:
+                set_asf_status("recovering", "ASF process is missing. Restarting...")
+                start_asf_process(True, "missing_process")
+                wait_for_asf_ipc(timeout)
+            elif not proc.alive():
+                set_asf_status("recovering", "ASF process exited. Waiting for possible self-restart...")
+                log("ASF process exited while BetterASF is still running. Waiting 8s before runtime recovery.")
+                recovered_by_self = False
+                for _ in range(8):
+                    if exit_event.is_set():
+                        return
+                    if ipc_ready(host, port):
+                        set_asf_status("online", "ASF IPC is available after self-restart.")
+                        recovered_by_self = True
+                        break
+                    time.sleep(1.0)
+                if recovered_by_self:
+                    continue
+                set_asf_status("recovering", "ASF crashed. Restoring bundled runtime...")
+                log("ASF did not recover by itself. Removing ASF-runtime and extracting bundled ASF again.")
+                start_asf_process(True, "process_exit")
+                wait_for_asf_ipc(timeout)
+            else:
+                if ipc_ready(host, port):
+                    if RUNTIME.get("asf_status") != "online":
+                        set_asf_status("online", "ASF IPC is available.")
+                elif RUNTIME.get("asf_status") == "online":
+                    set_asf_status("starting", "ASF process is alive, IPC is temporarily unavailable.")
+            time.sleep(2.0)
+
+    supervisor_started = {"done": False}
+
+    def start_asf_supervisor_once():
+        if supervisor_started["done"]:
+            return
+        supervisor_started["done"] = True
+        log("ASF supervisor: starting after UI initialization.")
+        threading.Thread(target=asf_supervisor, daemon=True).start()
 
     RUNTIME["steam_api_key"] = cfg.get("steam_api_key", "")
     inject = {
@@ -1924,11 +2165,6 @@ def main():
     local_url = f"http://127.0.0.1:{ui_port}/"
     log(f"Интерфейс: {local_url}  (прокси -> {host}:{port})")
 
-    threading.Thread(
-        target=monitor_ipc, args=(host, port, int(cfg["startup_timeout"]), asf_holder),
-        daemon=True,
-    ).start()
-
     for _ in range(50):
         if ipc_ready("127.0.0.1", ui_port):
             break
@@ -1941,6 +2177,9 @@ def main():
         if _stopped["done"]:
             return
         _stopped["done"] = True
+        exit_event.set()
+        RUNTIME["asf_status"] = "stopping"
+        RUNTIME["asf_status_message"] = "BetterASF is shutting down."
         log("Завершение работы...")
         try:
             br = bridge_ref.get("bridge")
@@ -1959,6 +2198,7 @@ def main():
     if ui_mode == "browser":
         browser_proc = launch_browser_app(local_url, cfg.get("browser_path", ""))
         RUNTIME["browser_pid"] = browser_proc.pid if browser_proc is not None else None
+        start_asf_supervisor_once()
         log("Browser Mode: WebView2 внутри BetterASF не запускается. Закройте окно браузера или нажмите Ctrl+C для выхода.")
         try:
             while not exit_event.is_set():
@@ -1976,6 +2216,7 @@ def main():
         log("pywebview недоступен, переключаюсь на Browser Mode.")
         browser_proc = launch_browser_app(local_url, cfg.get("browser_path", ""))
         RUNTIME["browser_pid"] = browser_proc.pid if browser_proc is not None else None
+        start_asf_supervisor_once()
         try:
             while not exit_event.is_set():
                 if browser_proc is not None and browser_proc.poll() is not None:
@@ -2007,6 +2248,7 @@ def main():
     bridge._window = window
 
     def on_loaded():
+        start_asf_supervisor_once()
         if get_app_setting("launch_minimized", False):
             def delayed_minimize():
                 time.sleep(0.35)
@@ -2021,6 +2263,12 @@ def main():
     except Exception:
         pass
     window.events.closed += cleanup
+
+    def delayed_supervisor_fallback():
+        time.sleep(12.0)
+        start_asf_supervisor_once()
+
+    threading.Thread(target=delayed_supervisor_fallback, daemon=True).start()
 
     gui = "edgechromium" if os.name == "nt" else None
     try:

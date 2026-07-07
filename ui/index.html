@@ -252,6 +252,15 @@
           <span class="switch-ui" aria-hidden="true"></span>
         </label>
 
+        <div class="settings-field-block">
+          <label class="field-label" for="set-priority-hour-games">Приоритетные игры для фарма часов</label>
+          <div class="settings-input-row">
+            <input id="set-priority-hour-games" class="settings-text-input" placeholder="Например: 730, 570, 440">
+            <button class="btn sm" id="save-priority-hour-games" type="button">Сохранить</button>
+          </div>
+          <p class="settings-field-hint">Эти AppID применяются к каждому аккаунту отдельно: если игра есть в библиотеке — она запускается, если нет — пропускается. После них список дополняется играми по часам.</p>
+        </div>
+
         <label class="switch-row" for="set-launch-minimized">
           <span class="switch-text">
             <b>Запуск в минимизированном состоянии</b>
@@ -280,8 +289,8 @@
 <div id="toast" class="toast"></div>
 <div id="update-banner" class="update-banner" aria-hidden="true">
   <div class="update-banner-text" id="update-banner-text">Доступно обновление BetterASF</div>
-  <button class="update-banner-link" id="update-banner-link" type="button">GitHub</button>
-  <button class="update-banner-ok" id="update-banner-ok" type="button" title="Закрыть">✓</button>
+  <button class="update-banner-link" id="update-banner-link" type="button">Обновить</button>
+  <button class="update-banner-ok" id="update-banner-ok" type="button" title="Закрыть">×</button>
 </div>
 <div id="context-menu" class="context-menu" aria-hidden="true"></div>
 
