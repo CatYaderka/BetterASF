@@ -19,7 +19,7 @@ except Exception:
 
 HERE = Path(__file__).resolve().parent
 APP_NAME = "BetterASF"
-APP_VERSION = "2.1"
+APP_VERSION = "2.0"
 GITHUB_REPO = "CatYaderka/BetterASF"
 
 _LOG_PATH = None
@@ -1143,7 +1143,7 @@ def _download_file(url, target):
 
 
 def install_github_update(exit_callback=None):
-    """Download the latest BetterASF exe and replace the installed copy after current process exits."""
+    """Start an elevated visible updater that downloads the latest exe, closes BetterASF/ASF and replaces the installed copy."""
     info = check_github_update()
     if not info.get("ok"):
         return {"ok": False, "message": info.get("message") or "Update check failed."}
@@ -1160,20 +1160,17 @@ def install_github_update(exit_callback=None):
             "url": info.get("url"),
             "downloadUrl": url,
         }
+    if os.name != "nt":
+        return {"ok": False, "message": "Automatic replacement is supported only on Windows."}
+
+    pf = os.environ.get("ProgramFiles") or os.environ.get("PROGRAMFILES")
+    if not pf:
+        return {"ok": False, "message": "ProgramFiles environment variable is missing."}
 
     try:
         version = _normalize_version(info.get("latestVersion") or "latest") or "latest"
         updates_dir = DATA_DIR / "updates"
         downloaded = updates_dir / f"BetterASF-{version}.exe"
-        log(f"Updater: downloading {url} -> {downloaded}")
-        _download_file(url, downloaded)
-
-        if os.name != "nt":
-            return {"ok": False, "message": "Automatic replacement is supported only on Windows.", "downloaded": str(downloaded)}
-
-        pf = os.environ.get("ProgramFiles") or os.environ.get("PROGRAMFILES")
-        if not pf:
-            return {"ok": False, "message": "ProgramFiles environment variable is missing.", "downloaded": str(downloaded)}
         install_dir = Path(pf) / APP_NAME
         dst = install_dir / f"{APP_NAME}.exe"
         update_log = DATA_DIR / "update.log"
@@ -1181,7 +1178,8 @@ def install_github_update(exit_callback=None):
         import base64
         ps = f"""
 $ErrorActionPreference = 'Stop'
-$src = {_ps_quote(downloaded)}
+$url = {_ps_quote(url)}
+$download = {_ps_quote(downloaded)}
 $dstDir = {_ps_quote(install_dir)}
 $dst = {_ps_quote(dst)}
 $oldPid = {os.getpid()}
@@ -1193,23 +1191,87 @@ function Log($m) {{
         Add-Content -LiteralPath $log -Encoding UTF8 -Value ((Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + ' ' + $m)
     }} catch {{}}
 }}
+function Download-WithProgress($source, $target) {{
+    Write-Host '[1/4] Downloading BetterASF update...' -ForegroundColor Cyan
+    Write-Host ('URL: ' + $source)
+    $dir = Split-Path -Parent $target
+    New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    $tmp = $target + '.part'
+    if (Test-Path -LiteralPath $tmp) {{ Remove-Item -LiteralPath $tmp -Force }}
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+    $req = [Net.HttpWebRequest]::Create($source)
+    $req.UserAgent = 'BetterASF-Updater'
+    $res = $req.GetResponse()
+    try {{
+        $total = [int64]$res.ContentLength
+        $input = $res.GetResponseStream()
+        $output = [IO.File]::Open($tmp, [IO.FileMode]::Create, [IO.FileAccess]::Write, [IO.FileShare]::None)
+        try {{
+            $buffer = New-Object byte[] 1048576
+            [int64]$readTotal = 0
+            $lastShown = -1
+            while (($read = $input.Read($buffer, 0, $buffer.Length)) -gt 0) {{
+                $output.Write($buffer, 0, $read)
+                $readTotal += $read
+                if ($total -gt 0) {{
+                    $pct = [int](($readTotal * 100) / $total)
+                    Write-Progress -Activity 'Downloading BetterASF' -Status ($pct.ToString() + '%') -PercentComplete $pct
+                    if ($pct -ge ($lastShown + 10)) {{
+                        Write-Host ('  ' + $pct + '%')
+                        $lastShown = $pct
+                    }}
+                }} else {{
+                    Write-Progress -Activity 'Downloading BetterASF' -Status ($readTotal.ToString() + ' bytes')
+                }}
+            }}
+        }} finally {{
+            if ($output) {{ $output.Dispose() }}
+            if ($input) {{ $input.Dispose() }}
+        }}
+    }} finally {{
+        if ($res) {{ $res.Dispose() }}
+    }}
+    Move-Item -LiteralPath $tmp -Destination $target -Force
+    Write-Progress -Activity 'Downloading BetterASF' -Completed
+    Write-Host '[1/4] Download complete.' -ForegroundColor Green
+}}
 try {{
-    Log 'Update install started.'
-    Log ('Downloaded exe: ' + $src)
+    Log 'Update started.'
+    Log ('Download URL: ' + $url)
     Log ('Target exe: ' + $dst)
-    New-Item -ItemType Directory -Force -Path $dstDir | Out-Null
-    try {{ Wait-Process -Id $oldPid -Timeout 60 -ErrorAction SilentlyContinue }} catch {{}}
+
+    Write-Host 'BetterASF updater' -ForegroundColor Cyan
+    Write-Host 'The current BetterASF and ASF processes will be closed before installation.'
+    Write-Host ''
+
+    Write-Host '[0/4] Waiting for BetterASF to close...' -ForegroundColor Cyan
+    try {{ Wait-Process -Id $oldPid -Timeout 90 -ErrorAction SilentlyContinue }} catch {{}}
     Start-Sleep -Milliseconds 1200
-    Copy-Item -LiteralPath $src -Destination $dst -Force
+
+    Download-WithProgress $url $download
+
+    Write-Host '[2/4] Preparing Program Files directory...' -ForegroundColor Cyan
+    New-Item -ItemType Directory -Force -Path $dstDir | Out-Null
+
+    Write-Host '[3/4] Installing update...' -ForegroundColor Cyan
+    Copy-Item -LiteralPath $download -Destination $dst -Force
     try {{ Unblock-File -LiteralPath $dst -ErrorAction SilentlyContinue }} catch {{}}
     Log 'Copy succeeded.'
+
+    Write-Host '[4/4] Starting updated BetterASF...' -ForegroundColor Cyan
     $env:BETTERASF_NO_SELF_INSTALL = '1'
     Start-Process -FilePath $dst -WorkingDirectory $dstDir
     Log 'Updated BetterASF started.'
-    Start-Sleep -Milliseconds 1000
-    try {{ Remove-Item -LiteralPath $src -Force -ErrorAction SilentlyContinue }} catch {{}}
+    try {{ Remove-Item -LiteralPath $download -Force -ErrorAction SilentlyContinue }} catch {{}}
+    Write-Host 'Done. This window will close in 3 seconds.' -ForegroundColor Green
+    Start-Sleep -Seconds 3
 }} catch {{
-    Log ('Fatal: ' + $_.Exception.Message)
+    $msg = $_.Exception.Message
+    Log ('Fatal: ' + $msg)
+    Write-Host ''
+    Write-Host ('Update failed: ' + $msg) -ForegroundColor Red
+    Write-Host ('Log: ' + $log) -ForegroundColor Yellow
+    Read-Host 'Press Enter to close'
 }}
 """
         encoded = base64.b64encode(ps.encode("utf-16le")).decode("ascii")
@@ -1217,15 +1279,15 @@ try {{
         import ctypes
         rc = ctypes.windll.shell32.ShellExecuteW(None, "runas", "powershell.exe", params, None, 1)
         if int(rc) <= 32:
-            return {"ok": False, "message": f"Elevation was not started, ShellExecute={int(rc)}", "downloaded": str(downloaded)}
+            return {"ok": False, "message": f"Elevation was not started, ShellExecute={int(rc)}"}
 
-        log(f"Updater: elevated replacement started, log={update_log}")
+        log(f"Updater: elevated updater started, log={update_log}")
         if exit_callback:
             try:
                 threading.Timer(0.8, exit_callback).start()
             except Exception:
                 pass
-        return {"ok": True, "message": "Update downloaded. BetterASF will restart to install it.", "version": version}
+        return {"ok": True, "message": "Updater started. BetterASF and ASF will close now.", "version": version}
     except Exception as e:
         log(f"Updater error: {e}")
         return {"ok": False, "message": str(e)}
