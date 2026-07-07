@@ -44,9 +44,16 @@ async function installBetterASFUpdate(btn) {
     const r = await fetch('/__install_update', { method: 'POST', cache: 'no-store' });
     const d = await r.json().catch(() => ({}));
     if (!r.ok || !d.ok) throw new Error(d.message || ('HTTP ' + r.status));
-    toast('Обновление загружено, BetterASF перезапустится', 'ok');
+    toast('Обновление запущено, BetterASF закроется', 'ok');
     logEvent('Updater: ' + (d.message || 'update started'));
     hideUpdateBanner();
+    setTimeout(async () => {
+      const a = bridge();
+      if (a && a.exit_app) {
+        try { await a.exit_app(); return; } catch (e) {}
+      }
+      try { await fetch('/__exit', { method: 'POST' }); } catch (e) {}
+    }, 500);
   } catch (e) {
     toast('Не удалось обновить: ' + e.message, 'err');
     logEvent('Updater error: ' + e.message);

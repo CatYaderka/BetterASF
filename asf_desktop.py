@@ -19,7 +19,7 @@ except Exception:
 
 HERE = Path(__file__).resolve().parent
 APP_NAME = "BetterASF"
-APP_VERSION = "2.1"
+APP_VERSION = "2.0"
 GITHUB_REPO = "CatYaderka/BetterASF"
 
 _LOG_PATH = None
@@ -1178,6 +1178,9 @@ def install_github_update(exit_callback=None):
         import base64
         ps = f"""
 $ErrorActionPreference = 'Stop'
+$Host.UI.RawUI.WindowTitle = 'BetterASF Updater'
+Clear-Host
+Write-Host 'BetterASF updater started...' -ForegroundColor Cyan
 $url = {_ps_quote(url)}
 $download = {_ps_quote(downloaded)}
 $dstDir = {_ps_quote(install_dir)}
@@ -1274,19 +1277,16 @@ try {{
     Read-Host 'Press Enter to close'
 }}
 """
-        encoded = base64.b64encode(ps.encode("utf-16le")).decode("ascii")
-        params = f'-NoProfile -ExecutionPolicy Bypass -EncodedCommand {encoded}'
+        script_path = updates_dir / "update-betterasf.ps1"
+        script_path.parent.mkdir(parents=True, exist_ok=True)
+        script_path.write_text(ps, encoding="utf-8-sig")
+        params = f'-NoProfile -ExecutionPolicy Bypass -File "{script_path}"'
         import ctypes
         rc = ctypes.windll.shell32.ShellExecuteW(None, "runas", "powershell.exe", params, None, 1)
         if int(rc) <= 32:
             return {"ok": False, "message": f"Elevation was not started, ShellExecute={int(rc)}"}
 
-        log(f"Updater: elevated updater started, log={update_log}")
-        if exit_callback:
-            try:
-                threading.Timer(0.8, exit_callback).start()
-            except Exception:
-                pass
+        log(f"Updater: elevated updater started, script={script_path}, log={update_log}")
         return {"ok": True, "message": "Updater started. BetterASF and ASF will close now.", "version": version}
     except Exception as e:
         log(f"Updater error: {e}")
@@ -1995,6 +1995,16 @@ class Bridge:
             set_app_setting(key, bool(value))
             return True
         return False
+
+    def exit_app(self):
+        try:
+            RUNTIME["asf_status"] = "stopping"
+            RUNTIME["asf_status_message"] = "BetterASF is closing for update."
+            if self._window:
+                self._window.destroy()
+            return True
+        except Exception:
+            return False
 
     def set_theme(self, theme):
         if theme in ("dark", "light"):
