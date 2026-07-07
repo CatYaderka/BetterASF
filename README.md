@@ -2,7 +2,7 @@
 
 <img src=".github/logo.png" alt="BetterASF" width="140" />
 
-# BetterASF v2.0
+# BetterASF
 
 **Современный desktop-интерфейс для [ArchiSteamFarm](https://github.com/JustArchiNET/ArchiSteamFarm) на Python, pywebview и Edge WebView2.**
 
