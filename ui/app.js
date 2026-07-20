@@ -586,6 +586,7 @@ async function refreshBots() {
   checkRequiredInput(bots);
   maybeStartHourFarmOnLaunch(bots);
   maybeAutoHourFarmAfterCards(bots);
+  maybeReapplyHourFarmAfterReconnect(bots);
 }
 
 const INPUT_TYPES = {
@@ -600,6 +601,16 @@ const INPUT_TYPES = {
 let _guardActive = null;
 
 function checkRequiredInput(bots) {
+  for (const name of Object.keys(bots || {})) {
+    const type = bots[name].RequiredInput;
+    if (type && INPUT_TYPES[type]) {
+      const key = name + ':' + type;
+      if (!_inputLogged.has(key)) {
+        _inputLogged.add(key);
+        logEvent('Вход не завершён для ' + name + ': требуется ' + INPUT_TYPES[type].label);
+      }
+    }
+  }
   if (_guardActive) return;
   for (const name of Object.keys(bots || {})) {
     const type = bots[name].RequiredInput;
@@ -680,9 +691,13 @@ let AUTO_HOUR_FARM = localStorage.getItem('asf_auto_hour_farm_after_cards') === 
 let START_HOUR_FARM = localStorage.getItem('asf_start_hour_farm_on_launch') === '1';
 let PRIORITY_HOUR_APPIDS = localStorage.getItem('asf_priority_hour_farm_appids') || '';
 let _startupHourDone = false;
+let _startupWaitStarted = 0;
+let _lastStartupWaitLog = 0;
 let _autoHourInitialized = false;
 const _autoHourSeenCardWork = new Set();
 const _autoHourBoosted = new Set();
+const _inputLogged = new Set();
+const _hourReapplyAt = new Map();
 
 function hasCardWork(bot) {
   if (!bot || !bot.KeepRunning || !bot.IsConnectedAndLoggedOn) return false;
@@ -818,6 +833,8 @@ async function boostHours(options = {}) {
           body: JSON.stringify({ Command: 'play ' + name + ' ' + selected.join(',') }),
         });
         done++;
+        _autoHourBoosted.add(name);
+        _hourReapplyAt.set(name, Date.now() + 10 * 60 * 1000);
         if (priority.length) {
           const missing = priority.filter(appid => !ownedSet.has(appid));
           if (missing.length) logEvent(name + ': нет приоритетных игр ' + missing.join(', ') + ' — пропуск для этого аккаунта');
@@ -836,18 +853,53 @@ async function boostHours(options = {}) {
   }
 }
 
+function botInitState(bots) {
+  const names = Object.keys(bots || {}).filter(n => bots[n] && bots[n].KeepRunning);
+  const pending = [];
+  const failed = [];
+  const ready = [];
+  for (const n of names) {
+    const b = bots[n];
+    if (b.RequiredInput) failed.push(n);
+    else if (b.IsConnectedAndLoggedOn) ready.push(n);
+    else pending.push(n);
+  }
+  return { names, pending, failed, ready };
+}
+
 function maybeStartHourFarmOnLaunch(bots) {
   if (!START_HOUR_FARM || _startupHourDone || _boosting || !bots) return;
+  const st = botInitState(bots);
+  if (!_startupWaitStarted) _startupWaitStarted = Date.now();
+  const waited = Date.now() - _startupWaitStarted;
+  const timeoutMs = 180000;
+
+  if (st.failed.length) {
+    for (const n of st.failed) logEvent('Фарм часов при запуске: ' + n + ' пропущен, вход не завершён.');
+  }
+
+  if (st.pending.length && waited < timeoutMs) {
+    if (Date.now() - _lastStartupWaitLog > 15000) {
+      _lastStartupWaitLog = Date.now();
+      logEvent('Фарм часов при запуске: жду инициализацию ботов (' + st.pending.join(', ') + ')');
+    }
+    return;
+  }
+
   _startupHourDone = true;
-  const targets = Object.keys(bots).filter(n => isFarmedIdle(bots[n]));
+  const targets = st.ready.filter(n => isFarmedIdle(bots[n]));
   if (!targets.length) {
     logEvent('Фарм часов при запуске: подходящих аккаунтов нет.');
     return;
   }
-  targets.forEach(n => _autoHourBoosted.add(n));
+  targets.forEach(n => {
+    _autoHourBoosted.add(n);
+    _hourReapplyAt.set(n, Date.now() + 10 * 60 * 1000);
+  });
   logEvent('Фарм часов при запуске: аккаунтов ' + targets.length);
   setTimeout(() => boostHours({ targets, startup: true }), 700);
 }
+
 
 function maybeAutoHourFarmAfterCards(bots) {
   if (!AUTO_HOUR_FARM || _boosting || !bots) return;
@@ -878,6 +930,23 @@ function maybeAutoHourFarmAfterCards(bots) {
   logEvent('Автофарм часов: обычный фарм закончился для ' + ready.join(', '));
   toast('Обычный фарм завершён, запускаю фарм часов', 'ok');
   setTimeout(() => boostHours({ targets: ready, auto: true }), 500);
+}
+
+function maybeReapplyHourFarmAfterReconnect(bots) {
+  if ((!START_HOUR_FARM && !AUTO_HOUR_FARM) || _boosting || !bots) return;
+  const now = Date.now();
+  const ready = [];
+  for (const n of Object.keys(bots)) {
+    if (!isFarmedIdle(bots[n])) continue;
+    if (!_autoHourBoosted.has(n)) continue;
+    const next = _hourReapplyAt.get(n) || 0;
+    if (now < next) continue;
+    ready.push(n);
+    _hourReapplyAt.set(n, now + 10 * 60 * 1000);
+  }
+  if (!ready.length) return;
+  logEvent('Проверка фарма часов после восстановления связи: ' + ready.join(', '));
+  setTimeout(() => boostHours({ targets: ready, reapply: true }), 500);
 }
 
 function openApiKeyModal() {
