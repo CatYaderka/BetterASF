@@ -1,150 +1,241 @@
-<div align="center">
+<p align="center">
+  <img src=".github/logo.png" alt="BetterASF" width="120">
+</p>
 
-<img src=".github/logo.png" alt="BetterASF" width="140" />
+<h1 align="center">BetterASF</h1>
 
-# BetterASF
-
-**Современный desktop-интерфейс для [ArchiSteamFarm](https://github.com/JustArchiNET/ArchiSteamFarm) на Python, pywebview и Edge WebView2.**
-
-</div>
+<p align="center">
+  Desktop-оболочка для ArchiSteamFarm с собственным интерфейсом и запуском без браузера.
+</p>
 
 ---
 
-## Что это
+## О проекте
 
-BetterASF запускает ASF в фоне и открывает удобный нативный интерфейс управления ботами, командами, плагинами, Steam Guard и фармом карточек. Проект хранит пользовательские данные в `Documents\BetterASF`, поэтому конфиги ботов не теряются при обновлении программы.
+BetterASF — это неофициальный лаунчер и интерфейс для [ArchiSteamFarm](https://github.com/JustArchiNET/ArchiSteamFarm). Приложение запускает ASF в фоне, поднимает локальный интерфейс и открывает его в отдельном окне на базе WebView2.
 
-## Главное в v2.0
+Основная идея простая: не открывать ASF UI в браузере и не править конфиги вручную каждый раз, а держать управление ботами, командами и настройками в одном desktop-окне.
 
-- **Оптимизированный WebView2-режим**: агрессивные флаги Chromium, `single-process`/ограничение renderer-процессов, trim working set и корректный подсчёт памяти WebView2.
-- **Автозапуск ASF и устойчивость к самообновлению ASF**: BetterASF запускает ASF без `--NO-RESTART`, корректно переживает обновление ASF и повторно стартует процесс, если IPC не поднялся.
-- **Автоподписка на группу BetterASF**: для ботов задаётся `s_SteamMasterClanID = 103582791475681171`; автоподписка на оригинальную группу ASF не включается.
-- **4 темы оформления**:
-  - тёмная стандартная;
-  - светлая стандартная;
-  - тёмная Dead Dream;
-  - светлая Dead Dream.
-- **Статистика фарма**: игры, карточки, примерное оставшееся время, состояние ботов и память `ASF / BetterASF / WebView2`.
-- **Фарм часов**:
-  - ручной запуск через кнопку-молнию;
-  - автоматический запуск после завершения фарма карточек;
-  - запуск фарма часов при старте BetterASF.
-- **Системные настройки**:
-  - сворачивание в tray;
-  - запуск вместе с Windows;
-  - запуск в минимизированном состоянии;
-  - кнопки перезагрузки ASF и проверки обновления ASF.
-- **Проверка обновлений BetterASF через GitHub Releases**: если доступен релиз новее текущей версии, снизу появляется уведомление с кнопкой скачивания.
+Проект в первую очередь рассчитан на Windows 10/11.
 
-## Быстрый старт
+## Возможности
 
-### 1. Установка зависимостей
+- запуск и остановка ASF вместе с BetterASF;
+- собственный интерфейс для управления ботами;
+- просмотр статуса ботов, фарма карточек и базовой статистики;
+- отправка команд в ASF через IPC API;
+- создание и редактирование конфигов ботов из интерфейса;
+- ввод Steam Guard / 2FA в отдельном окне;
+- список плагинов ASF;
+- ручной и автоматический фарм часов;
+- несколько тем оформления;
+- сворачивание в tray;
+- автозапуск вместе с Windows;
+- проверка обновлений BetterASF через GitHub Releases;
+- режим пониженного потребления памяти для WebView2.
 
-```bash
-pip install -r requirements.txt
+## Как это работает
+
+BetterASF состоит из двух частей:
+
+```text
+asf_desktop.py  — запуск ASF, локальный сервер, прокси к IPC, окно WebView2
+ui/             — HTML/CSS/JS интерфейс
 ```
 
-### 2. Запуск
+При запуске приложение:
 
-```bash
+1. ищет `ArchiSteamFarm.exe`;
+2. при необходимости распаковывает встроенную папку `_asf` в runtime-каталог;
+3. запускает ASF;
+4. ждёт, пока поднимется IPC;
+5. запускает локальный HTTP-сервер;
+6. проксирует запросы интерфейса к ASF API;
+7. открывает окно WebView2 или внешний браузер, если выбран browser-режим.
+
+## Установка из исходников
+
+### Требования
+
+- Windows 10/11;
+- Python 3.10 или новее;
+- Microsoft Edge WebView2 Runtime;
+- ArchiSteamFarm.
+
+### Установка зависимостей
+
+```bat
+python -m pip install -r requirements.txt
+```
+
+### Запуск
+
+```bat
 python asf_desktop.py
 ```
 
-Или используйте готовые `.bat`-файлы:
+Также можно использовать готовые bat-файлы:
 
-- `Run-ASF-Desktop.bat` — обычный запуск;
-- `Debug-Run.bat` — запуск с консолью и диагностикой.
+```text
+Run-ASF-Desktop.bat  — обычный запуск
+Debug-Run.bat        — запуск с консолью и диагностикой
+```
 
-### 3. ASF runtime
+## Где должен лежать ASF
 
 BetterASF ищет ASF в нескольких местах:
 
-- `Documents\BetterASF\ASF-runtime\ArchiSteamFarm.exe`;
-- рядом с приложением;
-- путь из `config.ini` (`asf_path`).
+```text
+Documents\BetterASF\ASF-runtime\ArchiSteamFarm.exe
+папка рядом с BetterASF
+путь из config.ini, параметр asf_path
+```
 
-Если в сборку встроена папка `_asf`, она распаковывается в `Documents\BetterASF\ASF-runtime`.
+Если в сборку добавлена папка `_asf`, она копируется в:
 
-## Конфигурация
+```text
+Documents\BetterASF\ASF-runtime
+```
 
-Основной файл:
+Пользовательские конфиги ботов хранятся отдельно, поэтому они не должны теряться при обновлении программы.
+
+## Данные и настройки
+
+Основная папка данных:
+
+```text
+Documents\BetterASF
+```
+
+В ней обычно находятся:
+
+```text
+ASF-runtime\       — распакованный ASF
+config\            — конфиги ботов ASF
+settings.json      — настройки интерфейса
+debug-log.txt      — лог отладочного запуска
+```
+
+Основной файл конфигурации проекта:
 
 ```text
 config.ini
 ```
 
-Пользовательские настройки интерфейса сохраняются в:
+Часть настроек можно менять из интерфейса, часть — вручную в `config.ini`.
 
-```text
-Documents\BetterASF\settings.json
-```
+## Основные параметры config.ini
 
-Конфиги ботов ASF хранятся в:
-
-```text
-Documents\BetterASF\config
-```
-
-### Важные параметры `config.ini`
-
-| Параметр | Назначение |
+| Параметр | Описание |
 |---|---|
+| `asf_path` | Явный путь к `ArchiSteamFarm.exe`. |
 | `start_asf` | Запускать ASF вместе с BetterASF. |
-| `ipc_host`, `ipc_port` | Адрес IPC ASF. По умолчанию `127.0.0.1:1242`. |
-| `startup_timeout` | Сколько ждать поднятия ASF IPC. |
-| `ui_mode` | `webview` — встроенный интерфейс; `browser` — внешний браузер/app mode. |
-| `webview_low_memory` | Включить оптимизированный режим WebView2. |
-| `webview_aggressive` | Агрессивнее отключать лишние сервисы Chromium. |
-| `webview_single_process` | Пытаться ограничить WebView2 одним renderer-процессом. |
-| `webview_disable_gpu` | Отключить GPU. Может вызвать серое окно на некоторых системах. |
-| `webview_in_process_gpu` | Пытаться держать GPU внутри процесса WebView2. |
-| `memory_trim` | Периодически подрезать working set BetterASF/WebView2. |
-| `memory_include_orphan_webview2` | Учитывать `msedgewebview2.exe`, даже если runtime не показывает его дочерним процессом Python. |
+| `ipc_host` | Хост IPC ASF. Обычно `127.0.0.1`. |
+| `ipc_port` | Порт IPC ASF. Обычно `1242`. |
+| `ipc_password` | Пароль IPC, если он задан в ASF. |
+| `startup_timeout` | Сколько ждать запуска IPC. |
+| `ui_mode` | `webview` или `browser`. |
+| `window_width` / `window_height` | Размер окна при запуске. |
+| `theme` | Тема по умолчанию. |
+| `frameless` | Использовать кастомную рамку окна. |
+| `webview_low_memory` | Включить low-memory режим для WebView2. |
+| `memory_trim` | Периодически подрезать working set процессов. |
+| `steam_api_key` | Steam Web API key для функций, которым нужен список игр. |
 
-## Сборка `.exe`
+## Сборка exe
 
-На Windows:
+Сборка выполняется через PyInstaller:
 
-```bash
+```bat
 python -m pip install -r requirements.txt pyinstaller
 pyinstaller asf_desktop.spec
 ```
 
-Результат появится в:
+После сборки файл появится в:
 
 ```text
 dist\BetterASF.exe
 ```
 
-## Tray
+Если нужно собрать exe со встроенным ASF, положите файлы ASF в папку `_asf` перед сборкой.
 
-Для настоящего сворачивания в системный tray используются:
+## Обновления
 
-```text
-pystray
-Pillow
-```
+BetterASF может проверять новые версии через GitHub Releases этого репозитория.
 
-Они уже указаны в `requirements.txt` и добавлены в `asf_desktop.spec`.
+Если найден релиз с версией выше текущей, в интерфейсе появляется уведомление с кнопкой загрузки. Автоматическая установка рассчитана на Windows-сборку `.exe`.
 
-## GitHub updates
+## Частые проблемы
 
-Текущая версия задаётся в `asf_desktop.py`:
+### Нет связи с ASF
 
-```python
-APP_VERSION = "2.0"
-```
+Проверьте, что в ASF включён IPC и порт совпадает с `ipc_port` в `config.ini`.
 
-Проверка обновлений сравнивает текущую версию с GitHub Releases репозитория:
+Обычно ASF IPC доступен по адресу:
 
 ```text
-CatYaderka/BetterASF
+http://127.0.0.1:1242
 ```
 
-Если найден релиз с тегом выше текущего (`v2.1`, `v3.0` и т.п.), BetterASF показывает нижний баннер с кнопкой скачивания последнего release asset.
+Если задан `IPCPassword`, укажите его в `config.ini` или через окно авторизации.
 
-## License
+### Окно пустое или белое
 
-См. файл `LICENSE`.
+Проверьте, установлен ли Microsoft Edge WebView2 Runtime. Если WebView2 не запускается, можно временно переключить режим интерфейса:
 
-Automatic update installation downloads the latest GitHub release `.exe`, starts an elevated replacement task, closes the current instance, copies the new executable to `Program Files\BetterASF`, and starts the updated copy.
+```ini
+ui_mode = browser
+```
+
+### ASF не находится
+
+Укажите путь вручную:
+
+```ini
+asf_path = C:\path\to\ArchiSteamFarm.exe
+```
+
+Либо положите ASF в папку рядом с приложением или в `Documents\BetterASF\ASF-runtime`.
+
+### Не сохраняются конфиги
+
+Проверьте права на запись в папку:
+
+```text
+Documents\BetterASF
+```
+
+Если приложение запущено из `Program Files`, пользовательские данные всё равно должны храниться в `Documents\BetterASF`.
+
+## Структура репозитория
+
+```text
+BetterASF/
+├─ asf_desktop.py        # основной Python-лаунчер
+├─ config.ini            # настройки по умолчанию
+├─ requirements.txt      # зависимости Python
+├─ asf_desktop.spec      # конфиг PyInstaller
+├─ build_exe.bat         # сборка exe
+├─ Run-ASF-Desktop.bat   # обычный запуск
+├─ Debug-Run.bat         # запуск с консолью
+├─ _asf/                 # место для встроенного ASF runtime
+└─ ui/
+   ├─ index.html         # разметка интерфейса
+   ├─ app.js             # логика интерфейса
+   ├─ style.css          # стили
+   └─ preview.html       # локальный предпросмотр
+```
+
+## Замечания по безопасности
+
+BetterASF работает поверх ASF IPC API. Steam-аккаунты и пароли сохраняются в конфигурации ASF, а не в отдельном облачном сервисе BetterASF.
+
+Перед использованием готовых exe-сборок лучше проверить исходники, релиз и содержимое папки `_asf`, особенно если сборка получена не из этого репозитория.
+
+## Лицензия
+
+Проект распространяется по лицензии MIT. Подробнее см. файл [LICENSE](LICENSE).
+
+## Отказ от ответственности
+
+BetterASF не является официальной частью ArchiSteamFarm и не связан с JustArchiNET. Все торговые марки и названия принадлежат их владельцам.
