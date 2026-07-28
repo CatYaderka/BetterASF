@@ -19,7 +19,7 @@ except Exception:
 
 HERE = Path(__file__).resolve().parent
 APP_NAME = "BetterASF"
-APP_VERSION = "2.0"
+APP_VERSION = "2.3"
 GITHUB_REPO = "CatYaderka/BetterASF"
 
 _LOG_PATH = None
@@ -333,24 +333,48 @@ try {{
     Log ('Target: ' + $dst)
     New-Item -ItemType Directory -Force -Path $dstDir | Out-Null
 
+    Write-Host 'BetterASF self-install' -ForegroundColor Cyan
+    Write-Host ('Source: ' + $src)
+    Write-Host ('Target: ' + $dst)
+
+    Log 'Stopping old installed BetterASF processes if any.'
     try {{
-        Copy-Item -LiteralPath $src -Destination $dst -Force
-        Log 'Copy succeeded.'
-    }} catch {{
-        Log ('Copy failed: ' + $_.Exception.Message)
-        if (Test-Path -LiteralPath $dst) {{
-            Log 'Existing installed copy found, starting it.'
-            Start-Process -FilePath $dst -WorkingDirectory $dstDir
-            exit 0
+        $oldInstalled = Get-CimInstance Win32_Process -Filter "Name='BetterASF.exe'" | Where-Object {{ $_.ExecutablePath -eq $dst -and $_.ProcessId -ne $oldPid }}
+        foreach ($p in $oldInstalled) {{
+            Log ('Stopping old installed process PID ' + $p.ProcessId)
+            Write-Host ('Stopping old installed BetterASF PID ' + $p.ProcessId) -ForegroundColor Yellow
+            Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue
         }}
-        throw
+        Start-Sleep -Milliseconds 800
+    }} catch {{ Log ('Process cleanup warning: ' + $_.Exception.Message) }}
+
+    $copied = $false
+    for ($i = 1; $i -le 10; $i++) {{
+        try {{
+            Write-Host ('Copy attempt ' + $i + '/10...') -ForegroundColor Cyan
+            Copy-Item -LiteralPath $src -Destination $dst -Force
+            $copied = $true
+            Log 'Copy succeeded.'
+            break
+        }} catch {{
+            Log ('Copy attempt ' + $i + ' failed: ' + $_.Exception.Message)
+            Write-Host ('Copy attempt failed: ' + $_.Exception.Message) -ForegroundColor Yellow
+            Start-Sleep -Seconds 1
+        }}
     }}
+    if (-not $copied) {{ throw 'Unable to copy BetterASF.exe to Program Files. See self-install.log.' }}
 
     try {{ Unblock-File -LiteralPath $dst -ErrorAction SilentlyContinue }} catch {{}}
+
+    $srcHash = (Get-FileHash -LiteralPath $src -Algorithm SHA256).Hash
+    $dstHash = (Get-FileHash -LiteralPath $dst -Algorithm SHA256).Hash
+    if ($srcHash -ne $dstHash) {{ throw 'Copied file hash mismatch.' }}
+    Log 'Hash verification succeeded.'
 
     $env:BETTERASF_NO_SELF_INSTALL = '1'
     Start-Process -FilePath $dst -WorkingDirectory $dstDir
     Log 'Installed copy started.'
+    Write-Host 'Installed copy started.' -ForegroundColor Green
 
     try {{ Wait-Process -Id $oldPid -Timeout 45 -ErrorAction SilentlyContinue }} catch {{}}
     Start-Sleep -Milliseconds 1000
@@ -1430,6 +1454,7 @@ def make_handler(ui_path, asf_host, asf_port, inject, stats_provider=None, exit_
                     "start_hour_farm_on_launch": bool(data.get("start_hour_farm_on_launch", False)),
                     "launch_minimized": bool(data.get("launch_minimized", False)),
                     "priority_hour_farm_appids": str(data.get("priority_hour_farm_appids", "") or ""),
+                    "hour_farm_max_games_by_bot": data.get("hour_farm_max_games_by_bot", {}) if isinstance(data.get("hour_farm_max_games_by_bot", {}), dict) else {},
                     "steam_api_key": bool((RUNTIME.get("steam_api_key") or data.get("steam_api_key") or "").strip()),
                     "ui_mode": inject.get("interfaceMode", "browser"),
                 }
@@ -1455,6 +1480,16 @@ def make_handler(ui_path, asf_host, asf_port, inject, stats_provider=None, exit_
                     # Keep only digits and common separators; UI normalizes the value too.
                     cleaned = "".join(ch if (ch.isdigit() or ch in ",; \n\t") else " " for ch in raw)
                     set_app_setting(key, cleaned.strip())
+                elif key == "hour_farm_max_games_by_bot":
+                    cleaned = {}
+                    if isinstance(value, dict):
+                        for bot_name, max_games in value.items():
+                            try:
+                                n = int(max_games)
+                            except Exception:
+                                n = 32
+                            cleaned[str(bot_name)] = max(1, min(32, n))
+                    set_app_setting(key, cleaned)
                 elif key == "steam_api_key":
                     val = (value or "").strip()
                     RUNTIME["steam_api_key"] = val
@@ -1977,6 +2012,7 @@ class Bridge:
             "start_hour_farm_on_launch": bool(data.get("start_hour_farm_on_launch", False)),
             "launch_minimized": bool(data.get("launch_minimized", False)),
             "priority_hour_farm_appids": str(data.get("priority_hour_farm_appids", "") or ""),
+            "hour_farm_max_games_by_bot": data.get("hour_farm_max_games_by_bot", {}) if isinstance(data.get("hour_farm_max_games_by_bot", {}), dict) else {},
         }
 
     def set_app_setting(self, key, value):

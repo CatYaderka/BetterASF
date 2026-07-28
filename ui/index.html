@@ -216,6 +216,15 @@
           <span class="switch-ui" aria-hidden="true"></span>
         </label>
 
+        <label class="switch-row" for="set-launch-minimized">
+          <span class="switch-text">
+            <b>Запуск в минимизированном состоянии</b>
+            <small>После открытия BetterASF сразу свернётся; если включён трей — спрячется в трей.</small>
+          </span>
+          <input type="checkbox" id="set-launch-minimized">
+          <span class="switch-ui" aria-hidden="true"></span>
+        </label>
+
         <label class="switch-row" for="set-autostart">
           <span class="switch-text">
             <b>Запуск вместе с системой</b>
@@ -261,15 +270,6 @@
           <p class="settings-field-hint">Эти AppID применяются к каждому аккаунту отдельно: если игра есть в библиотеке — она запускается, если нет — пропускается. После них список дополняется играми по часам.</p>
         </div>
 
-        <label class="switch-row" for="set-launch-minimized">
-          <span class="switch-text">
-            <b>Запуск в минимизированном состоянии</b>
-            <small>После открытия BetterASF сразу свернётся; если включён трей — спрячется в трей.</small>
-          </span>
-          <input type="checkbox" id="set-launch-minimized">
-          <span class="switch-ui" aria-hidden="true"></span>
-        </label>
-
         <div class="settings-mini-actions">
           <button class="mini-square-btn" id="asf-restart-action" title="Перезагрузить ASF" type="button">↻</button>
           <button class="mini-square-btn" id="asf-update-action" title="Проверить обновление ASF" type="button">⇩</button>
@@ -307,6 +307,9 @@
 
     <label class="field-label">Пароль Steam <span class="field-hint" id="ab-pass-hint"></span></label>
     <input id="ab-pass" type="password" placeholder="Пароль" autocomplete="off">
+
+    <label class="field-label">Максимум игр для фарма часов</label>
+    <input id="ab-hour-max-games" type="number" min="1" max="32" value="32">
 
     <label class="checkbox-row"><input id="ab-enabled" type="checkbox" checked><span>Включён</span></label>
 

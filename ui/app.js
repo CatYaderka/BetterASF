@@ -387,6 +387,8 @@ function fillForm(c) {
   setChk('ab-assumewallet', rp & RP.assumewallet);
   $('#ab-farmorder').value = String((c.FarmingOrders && c.FarmingOrders[0]) || 0);
   $('#ab-uimode').value = String(c.UserInterfaceMode != null ? c.UserInterfaceMode : 0);
+  const botNameForLimit = _editingBot || $('#ab-name').value || '';
+  $('#ab-hour-max-games').value = String(hourFarmMaxForBot(botNameForLimit));
   $('#ab-device').value = String(c.GamingDeviceType != null ? c.GamingDeviceType : 1);
   $('#ab-tradecheck').value = (c.TradeCheckPeriod != null ? c.TradeCheckPeriod : 60);
   $('#ab-sendtrade').value = (c.SendTradePeriod != null ? c.SendTradePeriod : 0);
@@ -499,6 +501,7 @@ async function saveBot() {
       method: 'POST',
       body: JSON.stringify({ BotConfig: cfg }),
     });
+    await saveHourFarmMaxForBot(name, $('#ab-hour-max-games').value);
     toast(_editingBot ? ('Сохранено: ' + name) : ('Бот создан: ' + name), 'ok');
     logEvent((_editingBot ? 'Изменён' : 'Создан') + ' бот: ' + name);
     closeAddBot();
@@ -690,6 +693,8 @@ let _boosting = false;
 let AUTO_HOUR_FARM = localStorage.getItem('asf_auto_hour_farm_after_cards') === '1';
 let START_HOUR_FARM = localStorage.getItem('asf_start_hour_farm_on_launch') === '1';
 let PRIORITY_HOUR_APPIDS = localStorage.getItem('asf_priority_hour_farm_appids') || '';
+let HOUR_FARM_MAX_BY_BOT = {};
+try { HOUR_FARM_MAX_BY_BOT = JSON.parse(localStorage.getItem('asf_hour_farm_max_by_bot') || '{}') || {}; } catch (e) { HOUR_FARM_MAX_BY_BOT = {}; }
 let _startupHourDone = false;
 let _startupWaitStarted = 0;
 let _lastStartupWaitLog = 0;
@@ -699,8 +704,30 @@ const _autoHourBoosted = new Set();
 const _inputLogged = new Set();
 const _hourReapplyAt = new Map();
 
+function isBotEnabled(bot) {
+  if (!bot) return false;
+  if (bot.Enabled === false) return false;
+  if (bot.BotConfig && bot.BotConfig.Enabled === false) return false;
+  return bot.KeepRunning !== false;
+}
+
+function hourFarmMaxForBot(name) {
+  const n = parseInt(HOUR_FARM_MAX_BY_BOT[name], 10);
+  return Number.isFinite(n) ? Math.max(1, Math.min(32, n)) : 32;
+}
+
+async function saveHourFarmMaxForBot(name, value) {
+  if (!name) return;
+  let n = parseInt(value, 10);
+  if (!Number.isFinite(n)) n = 32;
+  n = Math.max(1, Math.min(32, n));
+  HOUR_FARM_MAX_BY_BOT[name] = n;
+  localStorage.setItem('asf_hour_farm_max_by_bot', JSON.stringify(HOUR_FARM_MAX_BY_BOT));
+  try { await localSettings({ hour_farm_max_games_by_bot: HOUR_FARM_MAX_BY_BOT }); } catch (e) {}
+}
+
 function hasCardWork(bot) {
-  if (!bot || !bot.KeepRunning || !bot.IsConnectedAndLoggedOn) return false;
+  if (!isBotEnabled(bot) || !bot.IsConnectedAndLoggedOn) return false;
   const cf = bot.CardsFarmer || {};
   return !!(cf.NowFarming ||
     (Array.isArray(cf.CurrentGamesFarming) && cf.CurrentGamesFarming.length > 0) ||
@@ -708,7 +735,7 @@ function hasCardWork(bot) {
 }
 
 function isFarmedIdle(bot) {
-  if (!bot.KeepRunning || !bot.IsConnectedAndLoggedOn) return false;
+  if (!isBotEnabled(bot) || !bot.IsConnectedAndLoggedOn) return false;
   const cf = bot.CardsFarmer || {};
   const farming = (cf.CurrentGamesFarming || []).length > 0;
   const toFarm = Array.isArray(cf.GamesToFarm) ? cf.GamesToFarm.length : 0;
@@ -812,12 +839,13 @@ async function boostHours(options = {}) {
       // Priority AppIDs apply to every account independently:
       // if the account owns 3 priority games, start all 3; if it owns 2, start those 2.
       const ownedSet = ownedSetByBot[name];
-      const priorityOwned = priority.filter(appid => ownedSet.has(appid)).slice(0, 32);
+      const maxGames = hourFarmMaxForBot(name);
+      const priorityOwned = priority.filter(appid => ownedSet.has(appid)).slice(0, maxGames);
       const selected = [...priorityOwned];
       const selectedSet = new Set(selected);
 
       for (const appid of ownedByBot[name]) {
-        if (selected.length >= 32) break;
+        if (selected.length >= maxGames) break;
         if (selectedSet.has(appid)) continue;
         selected.push(appid);
         selectedSet.add(appid);
@@ -854,7 +882,7 @@ async function boostHours(options = {}) {
 }
 
 function botInitState(bots) {
-  const names = Object.keys(bots || {}).filter(n => bots[n] && bots[n].KeepRunning);
+  const names = Object.keys(bots || {}).filter(n => isBotEnabled(bots[n]));
   const pending = [];
   const failed = [];
   const ready = [];
@@ -1160,6 +1188,10 @@ async function loadAppSettings() {
     START_HOUR_FARM = !!st.start_hour_farm_on_launch;
     startHour.checked = START_HOUR_FARM;
     localStorage.setItem('asf_start_hour_farm_on_launch', START_HOUR_FARM ? '1' : '0');
+  }
+  if (st.hour_farm_max_games_by_bot && typeof st.hour_farm_max_games_by_bot === 'object') {
+    HOUR_FARM_MAX_BY_BOT = st.hour_farm_max_games_by_bot;
+    localStorage.setItem('asf_hour_farm_max_by_bot', JSON.stringify(HOUR_FARM_MAX_BY_BOT));
   }
   if (priorityInput) {
     PRIORITY_HOUR_APPIDS = st.priority_hour_farm_appids || localStorage.getItem('asf_priority_hour_farm_appids') || '';
