@@ -13,6 +13,9 @@ datas = [
     ('ui', 'ui'),
     ('config.ini', '.'),
 ]
+# Keep the catalogue beside the bundled config so it remains an offline fallback.
+if os.path.exists('plugin_catalog.json'):
+    datas.append(('plugin_catalog.json', '.'))
 if os.path.exists('icon.ico'):
     datas.append(('icon.ico', '.'))
 if os.path.exists('icon_source.png'):

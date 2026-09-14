@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "plugins": [
+    {
+      "id": "official-monitoring",
+      "name": "Monitoring",
+      "repository": "JustArchiNET/ArchiSteamFarm",
+      "asset_prefix": "ArchiSteamFarm.OfficialPlugins.Monitoring",
+      "description": "Official ASF plugin that exports monitoring metrics."
+    },
+    {
+      "id": "freepackages",
+      "name": "FreePackages",
+      "repository": "Citrinate/FreePackages",
+      "description": "Finds and redeems free Steam packages."
+    },
+    {
+      "id": "boostermanager",
+      "name": "BoosterManager",
+      "repository": "Citrinate/BoosterManager",
+      "description": "Creates Steam booster packs and manages card items."
+    },
+    {
+      "id": "cs2interface",
+      "name": "CS2Interface",
+      "repository": "Citrinate/CS2Interface",
+      "description": "Adds Counter-Strike 2 integrations to ASF."
+    },
+    {
+      "id": "commandlessredeem",
+      "name": "CommandlessRedeem",
+      "repository": "CatPoweredPlugins/CommandlessRedeem",
+      "description": "Adds commandless Steam key redemption."
+    }
+  ]
+}

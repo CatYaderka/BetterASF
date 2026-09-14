@@ -12,7 +12,7 @@
   <div class="tb-left pywebview-drag-region">
     <span class="tb-dot"></span>
     <span class="tb-title">BetterASF</span>
-    <span id="conn" class="tb-conn tb-conn--off">не подключено</span>
+    <span id="conn" class="tb-conn tb-conn--off" data-i18n="not_connected">не подключено</span>
   </div>
   <div class="tb-right">
     <button class="tb-btn" id="themeBtn" title="Сменить тему">
@@ -27,125 +27,141 @@
 </header>
 
 <div class="app">
-  
+
   <nav class="sidebar">
     <div class="nav-group">
-      <div class="nav-title">Управление</div>
+      <div class="nav-title" data-i18n="nav_control">Управление</div>
       <a class="nav-link active" data-view="dashboard">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
-        <span>Главная</span>
+        <span data-i18n="nav_dashboard">Главная</span>
       </a>
       <a class="nav-link" data-view="bots">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="3"/><path d="M2 21v-1a6 6 0 0 1 12 0v1M16 3.1a4 4 0 0 1 0 7.8M22 21v-1a6 6 0 0 0-4-5.6"/></svg>
-        <span>Боты</span>
+        <span data-i18n="nav_bots">Боты</span>
       </a>
       <a class="nav-link" data-view="commands">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg>
-        <span>Команды</span>
+        <span data-i18n="nav_commands">Команды</span>
       </a>
       <a class="nav-link" data-view="plugins">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h6v6H4zM14 4h6v6h-6zM14 14h6v6h-6zM4 17h6v3H4z"/></svg>
-        <span>Плагины</span>
+        <span data-i18n="nav_plugins">Плагины</span>
       </a>
       <a class="nav-link" data-view="log">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/></svg>
-        <span>Журнал</span>
+        <span data-i18n="nav_log">Журнал</span>
       </a>
       <a class="nav-link" data-view="settings">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        <span>Настройки</span>
+        <span data-i18n="nav_settings">Настройки</span>
+      </a>
+      <a class="nav-link pending-input-nav" id="pending-input-nav" href="#" aria-hidden="true" title="Есть запросы на вход">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 2.8 20.2h18.4L12 3Z"/><path d="M12 9v5"/><path d="M12 17h.01"/></svg>
+        <span data-i18n="login_requests">Запросы на вход</span>
+        <b class="pending-input-count" id="pending-input-count">0</b>
       </a>
     </div>
 
     <div class="nav-group nav-group--bottom">
-      <div class="nav-title">Статистика</div>
+      <div class="nav-title" data-i18n="nav_stats">Статистика</div>
       <div class="stat-grid">
-        <div class="stat-pill"><b id="st-farming">0</b><span>Фарм</span></div>
-        <div class="stat-pill"><b id="st-online">0</b><span>В сети</span></div>
-        <div class="stat-pill"><b id="st-offline">0</b><span>Не в сети</span></div>
-        <div class="stat-pill"><b id="st-total">0</b><span>Всего</span></div>
+        <div class="stat-pill"><b id="st-farming">0</b><span data-i18n="stat_farming">Фарм</span></div>
+        <div class="stat-pill"><b id="st-online">0</b><span data-i18n="stat_online">В сети</span></div>
+        <div class="stat-pill"><b id="st-offline">0</b><span data-i18n="stat_offline">Не в сети</span></div>
+        <div class="stat-pill"><b id="st-total">0</b><span data-i18n="stat_total">Всего</span></div>
       </div>
       <div class="sys">
-        <div class="sys-row"><span>Память всего</span><b id="sys-mem-total">—</b></div>
+        <div class="sys-row"><span data-i18n="sys_memory_total">Память всего</span><b id="sys-mem-total">—</b></div>
         <div class="sys-row"><span>ASF</span><b id="sys-mem">—</b></div>
         <div class="sys-row"><span>BetterASF</span><b id="sys-app-mem">—</b></div>
-        <div class="sys-row"><span>Аптайм</span><b id="sys-up">—</b></div>
-        <div class="sys-row"><span>Версия</span><b id="sys-ver">—</b></div>
+        <div class="sys-row"><span data-i18n="sys_uptime">Аптайм</span><b id="sys-up">—</b></div>
+        <div class="sys-row"><span data-i18n="sys_version">Версия</span><b id="sys-ver">—</b></div>
       </div>
     </div>
   </nav>
 
-  
+
   <main class="content">
 
-    
+
     <section class="view active" id="view-dashboard">
       <div class="view-head">
-        <h1>Главная</h1>
+        <h1 data-i18n="dashboard_title">Главная</h1>
         <button class="btn ghost" id="refreshBtn">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
-          Обновить
+          <span data-i18n="dashboard_refresh">Обновить</span>
         </button>
       </div>
 
       <div class="cards">
         <div class="info-card">
           <div class="ic-icon ic-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h4M8 10v4M15 11h.01M18 13h.01"/></svg></div>
-          <div><p class="ic-title">Игр осталось</p><p class="ic-value" id="kpi-games">—</p></div>
+          <div><p class="ic-title" data-i18n="kpi_games">Игр осталось</p><p class="ic-value" id="kpi-games">—</p></div>
         </div>
         <div class="info-card">
           <div class="ic-icon ic-violet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
-          <div><p class="ic-title">Времени осталось</p><p class="ic-value" id="kpi-time">—</p></div>
+          <div><p class="ic-title" data-i18n="kpi_time">Времени осталось</p><p class="ic-value" id="kpi-time">—</p></div>
         </div>
         <div class="info-card">
           <div class="ic-icon ic-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="14" height="18" rx="2"/><path d="M7 21V7a2 2 0 0 1 2-2h12v14a2 2 0 0 1-2 2z"/></svg></div>
-          <div><p class="ic-title">Карт осталось</p><p class="ic-value" id="kpi-cards">—</p></div>
+          <div><p class="ic-title" data-i18n="kpi_cards">Карт осталось</p><p class="ic-value" id="kpi-cards">—</p></div>
         </div>
       </div>
 
-      <h2 class="section-title">Боты</h2>
+      <h2 class="section-title" data-i18n="bots_title">Боты</h2>
       <div class="bot-grid" id="dash-bots"><div class="empty">Загрузка…</div></div>
     </section>
 
-    
+
     <section class="view" id="view-bots">
-      <div class="view-head"><h1>Боты</h1></div>
+      <div class="view-head"><h1 data-i18n="bots_title">Боты</h1></div>
       <div class="bot-grid bot-grid--full" id="bots-list"><div class="empty">Загрузка…</div></div>
     </section>
 
-    
+
     <section class="view" id="view-commands">
-      <div class="view-head"><h1>Команды</h1></div>
+      <div class="view-head"><h1 data-i18n="commands_title">Команды</h1></div>
       <div class="cmd-box">
         <div class="cmd-row">
-          <input id="cmd-input" placeholder="Введите команду, напр. status ASF" autocomplete="off">
-          <button class="btn primary" id="cmd-send">Выполнить</button>
+          <input id="cmd-input" placeholder="Введите команду, напр. status ASF" data-i18n-placeholder="command_placeholder" autocomplete="off">
+          <button class="btn primary" id="cmd-send" data-i18n="execute">Выполнить</button>
         </div>
         <div class="cmd-hint">
-          Подсказки:
+          <span data-i18n="commands_hint">Подсказки:</span>
           <button class="chip" data-cmd="status ASF">status ASF</button>
           <button class="chip" data-cmd="stats">stats</button>
           <button class="chip" data-cmd="help">help</button>
           <button class="chip" data-cmd="version">version</button>
         </div>
-        <pre class="cmd-output" id="cmd-output">Вывод команды появится здесь…</pre>
+        <pre class="cmd-output" id="cmd-output" data-i18n="command_output">Вывод команды появится здесь…</pre>
       </div>
     </section>
 
-    
+
     <section class="view" id="view-plugins">
-      <div class="view-head"><h1>Плагины</h1>
+      <div class="view-head"><h1 data-i18n="plugins_title">Плагины</h1>
         <button class="btn ghost" id="pluginsRefresh">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
-          Обновить
+          <span data-i18n="refresh">Обновить</span>
         </button>
       </div>
-      <div class="plugin-grid" id="plugins-list"><div class="empty">Загрузка…</div></div>
+      <div class="plugin-tabs" role="tablist" aria-label="Plugin sections">
+        <button class="plugin-tab active" data-plugin-tab="library" type="button" data-i18n="plugins_library">Библиотека</button>
+        <button class="plugin-tab" data-plugin-tab="store" type="button" data-i18n="plugins_store">Магазин плагинов</button>
+      </div>
+      <section class="plugin-pane active" id="plugins-library-pane">
+        <p class="plugin-pane-note" data-i18n="plugins_library_note">Установленные плагины ASF. После изменения ASF перезапускается автоматически.</p>
+        <div class="plugin-grid" id="plugins-list"><div class="empty">Загрузка…</div></div>
+      </section>
+      <section class="plugin-pane" id="plugins-store-pane">
+        <p class="plugin-pane-note" data-i18n="plugins_store_note">Каталог и ZIP-релизы проверяются напрямую на GitHub. Устанавливайте только плагины, которым доверяете.</p>
+        <div class="plugin-grid" id="plugins-store-list"><div class="empty">Загрузка…</div></div>
+      </section>
     </section>
 
     <section class="view" id="view-log">
-      <div class="view-head"><h1>Журнал</h1>
-        <button class="btn ghost" id="logClear">Очистить</button>
+      <div class="view-head"><h1 data-i18n="log_title">Журнал</h1>
+        <button class="btn ghost" id="logClear" data-i18n="clear">Очистить</button>
       </div>
       <pre class="cmd-output log-output" id="log-output">Журнал событий интерфейса…
 </pre>
@@ -153,11 +169,11 @@
     </section>
 
     <section class="view" id="view-settings">
-      <div class="view-head"><h1>Настройки</h1></div>
+      <div class="view-head"><h1 data-i18n="settings_title">Настройки</h1></div>
       <div class="cmd-box settings-container">
-        <h2 class="settings-section-title">Оформление и темы</h2>
-        <p class="settings-sub">Выберите цветовую схему и фоновое изображение для интерфейса BetterASF.</p>
-        
+        <h2 class="settings-section-title" data-i18n="appearance_title">Оформление и темы</h2>
+        <p class="settings-sub" data-i18n="appearance_sub">Выберите цветовую схему и фоновое изображение для интерфейса BetterASF.</p>
+
         <div class="theme-options">
           <div class="theme-option-card" data-theme-val="dark" id="theme-card-dark">
             <div class="theme-preview dark-preview">
@@ -166,7 +182,7 @@
             </div>
             <div class="theme-option-label">Тёмная тема (Стандартная)</div>
           </div>
-          
+
           <div class="theme-option-card" data-theme-val="light" id="theme-card-light">
             <div class="theme-preview light-preview">
               <div class="preview-title">BetterASF</div>
@@ -174,7 +190,7 @@
             </div>
             <div class="theme-option-label">Светлая тема (Стандартная)</div>
           </div>
-          
+
           <div class="theme-option-card" data-theme-val="dark-img" id="theme-card-dark-img">
             <div class="theme-preview dark-img-preview">
               <div class="preview-title">BetterASF</div>
@@ -182,7 +198,7 @@
             </div>
             <div class="theme-option-label">Тёмная тема (Dead Dream)</div>
           </div>
-          
+
           <div class="theme-option-card" data-theme-val="light-img" id="theme-card-light-img">
             <div class="theme-preview light-img-preview">
               <div class="preview-title">BetterASF</div>
@@ -191,26 +207,30 @@
             <div class="theme-option-label">Светлая тема (Dead Dream)</div>
           </div>
         </div>
-        
+
         <div class="settings-row settings-row--select">
-          <label class="field-label" for="settings-theme-select">Выбрать тему из списка:</label>
-          <select id="settings-theme-select" class="theme-select">
-            <option value="dark">Тёмная тема (Стандартная)</option>
-            <option value="light">Светлая тема (Стандартная)</option>
-            <option value="dark-img">Тёмная тема (Dead Dream)</option>
-            <option value="light-img">Светлая тема (Dead Dream)</option>
-          </select>
+          <label class="field-label" for="settings-theme-select" data-i18n="theme_choose">Выбрать тему из списка:</label>
+          <div class="theme-select-actions">
+            <select id="settings-theme-select" class="theme-select">
+              <option value="dark">Тёмная тема (Стандартная)</option>
+              <option value="light">Светлая тема (Стандартная)</option>
+              <option value="dark-img">Тёмная тема (Dead Dream)</option>
+              <option value="light-img">Светлая тема (Dead Dream)</option>
+              <option value="custom" data-i18n="custom_theme">Своя тема</option>
+            </select>
+            <button class="mini-square-btn custom-theme-add" id="custom-theme-add" type="button" data-i18n-title="custom_theme_add" title="Создать свою тему"><span aria-hidden="true">+</span></button>
+          </div>
         </div>
       </div>
 
       <div class="cmd-box settings-container settings-system">
-        <h2 class="settings-section-title">Поведение приложения</h2>
-        <p class="settings-sub">Настройки самого BetterASF. Они сохраняются в Documents\BetterASF\settings.json.</p>
+        <h2 class="settings-section-title" data-i18n="behavior_title">Поведение приложения</h2>
+        <p class="settings-sub" data-i18n="behavior_sub">Настройки самого BetterASF. Они сохраняются в Documents\BetterASF\settings.json.</p>
 
         <label class="switch-row" for="set-minimize-tray">
           <span class="switch-text">
-            <b>Сворачивание в трей</b>
-            <small>Кнопка закрытия будет сворачивать BetterASF, не завершая ASF.</small>
+            <b data-i18n="tray_title">Сворачивание в трей</b>
+            <small data-i18n="tray_sub">Кнопка закрытия будет сворачивать BetterASF, не завершая ASF.</small>
           </span>
           <input type="checkbox" id="set-minimize-tray">
           <span class="switch-ui" aria-hidden="true"></span>
@@ -218,8 +238,8 @@
 
         <label class="switch-row" for="set-launch-minimized">
           <span class="switch-text">
-            <b>Запуск в минимизированном состоянии</b>
-            <small>После открытия BetterASF сразу свернётся; если включён трей — спрячется в трей.</small>
+            <b data-i18n="minimized_title">Запуск в минимизированном состоянии</b>
+            <small data-i18n="minimized_sub">После открытия BetterASF сразу свернётся; если включён трей — спрячется в трей.</small>
           </span>
           <input type="checkbox" id="set-launch-minimized">
           <span class="switch-ui" aria-hidden="true"></span>
@@ -227,8 +247,8 @@
 
         <label class="switch-row" for="set-autostart">
           <span class="switch-text">
-            <b>Запуск вместе с системой</b>
-            <small>Добавляет BetterASF в автозагрузку текущего пользователя Windows.</small>
+            <b data-i18n="autostart_title">Запуск вместе с системой</b>
+            <small data-i18n="autostart_sub">Добавляет BetterASF в автозагрузку текущего пользователя Windows.</small>
           </span>
           <input type="checkbox" id="set-autostart">
           <span class="switch-ui" aria-hidden="true"></span>
@@ -236,8 +256,8 @@
 
         <label class="switch-row" for="set-economy-mode">
           <span class="switch-text">
-            <b>Экономичный режим интерфейса</b>
-            <small>Отключает фоновые картинки, blur/тяжёлые тени, аватарки и реже обновляет данные.</small>
+            <b data-i18n="economy_title">Экономичный режим интерфейса</b>
+            <small data-i18n="economy_sub">Отключает фоновые картинки, blur/тяжёлые тени, аватарки и реже обновляет данные.</small>
           </span>
           <input type="checkbox" id="set-economy-mode">
           <span class="switch-ui" aria-hidden="true"></span>
@@ -245,8 +265,8 @@
 
         <label class="switch-row" for="set-auto-hour-farm">
           <span class="switch-text">
-            <b>Запуск фарма часов после карточек</b>
-            <small>Когда обычный фарм карточек закончится, BetterASF автоматически запустит топ-32 игр по часам.</small>
+            <b data-i18n="auto_hours_title">Запуск фарма часов после карточек</b>
+            <small data-i18n="auto_hours_sub">Когда обычный фарм карточек закончится, BetterASF автоматически запустит топ-32 игр по часам.</small>
           </span>
           <input type="checkbox" id="set-auto-hour-farm">
           <span class="switch-ui" aria-hidden="true"></span>
@@ -254,25 +274,47 @@
 
         <label class="switch-row" for="set-start-hour-farm">
           <span class="switch-text">
-            <b>Фарм часов при запуске BetterASF</b>
-            <small>При старте интерфейса сразу запускает топ-32 игр на аккаунтах без оставшихся карточек.</small>
+            <b data-i18n="start_hours_title">Фарм часов при запуске BetterASF</b>
+            <small data-i18n="start_hours_sub">При старте интерфейса сразу запускает топ-32 игр на аккаунтах без оставшихся карточек.</small>
           </span>
           <input type="checkbox" id="set-start-hour-farm">
           <span class="switch-ui" aria-hidden="true"></span>
         </label>
 
         <div class="settings-field-block">
-          <label class="field-label" for="set-priority-hour-games">Приоритетные игры для фарма часов</label>
+          <label class="field-label" for="set-priority-hour-games" data-i18n="priority_games">Приоритетные игры для фарма часов</label>
           <div class="settings-input-row">
             <input id="set-priority-hour-games" class="settings-text-input" placeholder="Например: 730, 570, 440">
-            <button class="btn sm" id="save-priority-hour-games" type="button">Сохранить</button>
+            <button class="btn sm" id="save-priority-hour-games" type="button" data-i18n="save">Сохранить</button>
           </div>
-          <p class="settings-field-hint">Эти AppID применяются к каждому аккаунту отдельно: если игра есть в библиотеке — она запускается, если нет — пропускается. После них список дополняется играми по часам.</p>
+          <p class="settings-field-hint" data-i18n="priority_hint">Эти AppID применяются к каждому аккаунту отдельно: если игра есть в библиотеке — она запускается, если нет — пропускается. После них список дополняется играми по часам.</p>
+        </div>
+
+        <div class="settings-field-block">
+          <label class="field-label" for="set-language" data-i18n="language_label">Язык интерфейса</label>
+          <select id="set-language" class="theme-select settings-select">
+            <option value="ru">Русский</option>
+            <option value="en">English</option>
+            <option value="uk">Українська</option>
+          </select>
         </div>
 
         <div class="settings-mini-actions">
           <button class="mini-square-btn" id="asf-restart-action" title="Перезагрузить ASF" type="button">↻</button>
           <button class="mini-square-btn" id="asf-update-action" title="Проверить обновление ASF" type="button">⇩</button>
+        </div>
+
+        <div class="settings-field-block experimental-setting">
+          <div class="experimental-heading">
+            <label class="field-label" for="set-hour-farm-priority-mode" data-i18n="hour_priority_mode">Режим приоритетного фарма часов</label>
+            <span class="experimental-badge" data-i18n="experimental">Экспериментальная функция</span>
+          </div>
+          <select id="set-hour-farm-priority-mode" class="theme-select settings-select">
+            <option value="hours_asc" data-i18n="hours_asc">По возрастанию часов</option>
+            <option value="hours_desc" data-i18n="hours_desc">По убыванию часов</option>
+            <option value="popular" data-i18n="hours_popular">Популярные — списки из топа по онлайну</option>
+          </select>
+          <p class="settings-field-hint" data-i18n="hour_priority_mode_hint">В режиме «Популярные» BetterASF берёт актуальный топ Steam по онлайну и выдаёт следующим аккаунтам разные списки игр.</p>
         </div>
       </div>
     </section>
@@ -293,6 +335,48 @@
   <button class="update-banner-ok" id="update-banner-ok" type="button" title="Закрыть">×</button>
 </div>
 <div id="context-menu" class="context-menu" aria-hidden="true"></div>
+
+<div class="modal-overlay" id="custom-theme-modal" aria-hidden="true">
+  <div class="modal modal--wide custom-theme-modal">
+    <h2 data-i18n="custom_theme_title">Своя тема</h2>
+    <p class="modal-sub" data-i18n="custom_theme_sub">Выберите светлую или тёмную основу, загрузите своё изображение и при необходимости сделайте элементы прозрачными.</p>
+
+    <label class="field-label" data-i18n="custom_theme_base">Основа темы</label>
+    <div class="custom-theme-base-options">
+      <label class="custom-theme-base-option"><input type="radio" name="custom-theme-base" value="dark" checked><span data-i18n="custom_theme_dark">Тёмная</span></label>
+      <label class="custom-theme-base-option"><input type="radio" name="custom-theme-base" value="light"><span data-i18n="custom_theme_light">Светлая</span></label>
+    </div>
+
+    <label class="field-label" for="custom-theme-file" data-i18n="custom_theme_image">Своя картинка</label>
+    <input id="custom-theme-file" class="custom-theme-file" type="file" accept="image/png,image/jpeg,image/webp">
+    <div class="custom-theme-preview" id="custom-theme-preview" aria-hidden="true"></div>
+    <p class="settings-field-hint" id="custom-theme-file-note" data-i18n="custom_theme_image_hint">PNG, JPG или WebP, до 12 МБ. Если файл не выбрать, сохранится текущая картинка.</p>
+
+    <label class="checkbox-row custom-theme-transparency" for="custom-theme-transparent">
+      <input id="custom-theme-transparent" type="checkbox">
+      <span data-i18n="custom_theme_transparent">Включить прозрачность элементов</span>
+    </label>
+
+    <div class="modal-actions modal-actions--split">
+      <button class="btn danger" id="custom-theme-remove-image" type="button" data-i18n="custom_theme_remove_image">Убрать картинку</button>
+      <span style="flex:1"></span>
+      <button class="btn ghost" id="custom-theme-cancel" type="button" data-i18n="cancel">Отмена</button>
+      <button class="btn primary" id="custom-theme-save" type="button" data-i18n="save">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="plugin-remove-modal" aria-hidden="true">
+  <div class="modal">
+    <h2 data-i18n="plugin_remove_title">Удалить плагин?</h2>
+    <p class="modal-sub"><span data-i18n="plugin_remove_text">Плагин будет удалён из ASF:</span> <b id="plugin-remove-name"></b></p>
+    <p class="modal-sub" data-i18n="plugin_remove_restart">ASF будет автоматически перезапущен. Это действие нельзя отменить.</p>
+    <div class="modal-actions">
+      <button class="btn ghost" id="plugin-remove-cancel" type="button" data-i18n="cancel">Отмена</button>
+      <button class="btn danger" id="plugin-remove-confirm" type="button" data-i18n="remove">Удалить</button>
+    </div>
+  </div>
+</div>
 
 <div class="modal-overlay" id="addbot-modal">
   <div class="modal modal--wide modal--scroll">

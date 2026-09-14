@@ -10,6 +10,11 @@ import http.server
 import socketserver
 import urllib.request
 import urllib.error
+import hashlib
+import shutil
+import tempfile
+import zipfile
+import base64
 from pathlib import Path
 
 try:
@@ -19,8 +24,40 @@ except Exception:
 
 HERE = Path(__file__).resolve().parent
 APP_NAME = "BetterASF"
-APP_VERSION = "2.3"
+APP_VERSION = "3.0"
 GITHUB_REPO = "CatYaderka/BetterASF"
+
+# Curated GitHub sources for the plugin store. The release asset, version and
+# availability are read live from GitHub; this list only restricts installation
+# to known ASF plugin projects instead of accepting arbitrary executable URLs.
+# ASF ships several official plugins in its standard bundle. Their real public
+# IPlugin.Name is stable even when the package directory is an assembly filename.
+OFFICIAL_PLUGIN_DISPLAY_NAMES = {
+    "archisteamfarmofficialpluginsitemsmatcher": "ItemsMatcher",
+    "archisteamfarmofficialpluginsmobileauthenticator": "MobileAuthenticator",
+    "archisteamfarmofficialpluginsmonitoring": "Monitoring",
+    "archisteamfarmofficialpluginssteamtokendumper": "SteamTokenDumper",
+}
+
+DEFAULT_PLUGIN_STORE_SOURCES = (
+    {"id": "official-monitoring", "name": "Monitoring", "repository": "JustArchiNET/ArchiSteamFarm", "asset_prefix": "ArchiSteamFarm.OfficialPlugins.Monitoring", "description": "Official ASF plugin that exports monitoring metrics."},
+    {"id": "freepackages", "name": "FreePackages", "repository": "Citrinate/FreePackages", "description": "Finds and redeems free Steam packages."},
+    {"id": "boostermanager", "name": "BoosterManager", "repository": "Citrinate/BoosterManager", "description": "Creates Steam booster packs and manages card items."},
+    {"id": "cs2interface", "name": "CS2Interface", "repository": "Citrinate/CS2Interface", "description": "Adds Counter-Strike 2 integrations to ASF."},
+    {"id": "commandlessredeem", "name": "CommandlessRedeem", "repository": "CatPoweredPlugins/CommandlessRedeem", "description": "Adds commandless Steam key redemption."},
+)
+# The catalogue is read from this repository on each plugin-store visit using
+# HTTP ETags. The packaged JSON is only a safe offline fallback.
+PLUGIN_CATALOG_FILENAME = "plugin_catalog.json"
+PLUGIN_CATALOG_URL = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/{PLUGIN_CATALOG_FILENAME}"
+PLUGIN_CATALOG_CACHE_FILE = None  # Assigned after DATA_DIR is initialized.
+PLUGIN_STORE_SOURCES = tuple(DEFAULT_PLUGIN_STORE_SOURCES)
+_PLUGIN_CATALOG_STATE = {"loaded": False, "etag": "", "sources": tuple(DEFAULT_PLUGIN_STORE_SOURCES)}
+_PLUGIN_CATALOG_LOCK = threading.RLock()
+_PLUGIN_STORE_CACHE = {"at": 0.0, "items": [], "error": ""}
+_PLUGIN_STORE_LOCK = threading.RLock()
+_POPULAR_GAMES_CACHE = {"at": 0.0, "games": [], "error": ""}
+_POPULAR_GAMES_LOCK = threading.RLock()
 
 _LOG_PATH = None
 RUNTIME = {"steam_api_key": "", "asf_status": "starting", "asf_status_message": ""}
@@ -88,6 +125,7 @@ def data_dir():
 
 
 DATA_DIR = data_dir()
+PLUGIN_CATALOG_CACHE_FILE = DATA_DIR / "plugin-catalog-cache.json"
 
 
 def ui_dir():
@@ -112,6 +150,8 @@ DEFAULTS = {
     "self_install_to_program_files": "true",
     "create_shortcuts": "true",
     "startup_timeout": "180",
+    "asf_self_restart_grace": "90",
+    "asf_use_job_object": "false",
     "theme": "dark",
     "frameless": "true",
     "ui_port": "0",
@@ -183,6 +223,100 @@ def _save_settings(patch):
 
 def save_theme(theme):
     _save_settings({"theme": theme})
+
+
+_CUSTOM_THEME_IMAGE_PREFIX = "custom-theme-image"
+_CUSTOM_THEME_IMAGE_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".webp": "image/webp",
+}
+_CUSTOM_THEME_MAX_BYTES = 12 * 1024 * 1024
+
+
+def _custom_theme_image_path(settings=None):
+    settings = settings if isinstance(settings, dict) else _load_settings()
+    filename = str(settings.get("custom_theme_image") or "")
+    if filename not in {f"{_CUSTOM_THEME_IMAGE_PREFIX}{ext}" for ext in _CUSTOM_THEME_IMAGE_TYPES}:
+        return None
+    path = DATA_DIR / filename
+    return path if path.is_file() else None
+
+
+def custom_theme_state():
+    settings = _load_settings()
+    base = str(settings.get("custom_theme_base") or "dark").lower()
+    if base not in ("dark", "light"):
+        base = "dark"
+    image = _custom_theme_image_path(settings)
+    return {
+        "ok": True,
+        "base": base,
+        "transparent": bool(settings.get("custom_theme_transparent", False)),
+        "hasImage": bool(image),
+        "imageUrl": f"/__custom_theme/image?v={image.stat().st_mtime_ns}" if image else "",
+    }
+
+
+def _custom_theme_image_type(data):
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png"
+    if data.startswith(b"\xff\xd8\xff"):
+        return ".jpg"
+    if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return ".webp"
+    return None
+
+
+def save_custom_theme(payload):
+    if not isinstance(payload, dict):
+        return {"ok": False, "message": "Invalid custom theme data."}
+    base = str(payload.get("base") or "dark").lower()
+    if base not in ("dark", "light"):
+        return {"ok": False, "message": "Invalid base theme."}
+    patch = {
+        "custom_theme_base": base,
+        "custom_theme_transparent": bool(payload.get("transparent", False)),
+    }
+    try:
+        if payload.get("removeImage"):
+            for ext in _CUSTOM_THEME_IMAGE_TYPES:
+                try:
+                    (DATA_DIR / f"{_CUSTOM_THEME_IMAGE_PREFIX}{ext}").unlink(missing_ok=True)
+                except Exception:
+                    pass
+            patch["custom_theme_image"] = ""
+
+        image_data = payload.get("imageData")
+        if image_data:
+            if not isinstance(image_data, str) or not image_data.startswith("data:image/") or "," not in image_data:
+                return {"ok": False, "message": "Invalid image format."}
+            encoded = image_data.split(",", 1)[1]
+            try:
+                raw = base64.b64decode(encoded, validate=True)
+            except Exception:
+                return {"ok": False, "message": "Image data cannot be decoded."}
+            if not raw or len(raw) > _CUSTOM_THEME_MAX_BYTES:
+                return {"ok": False, "message": "Image exceeds the 12 MB limit."}
+            ext = _custom_theme_image_type(raw)
+            if not ext:
+                return {"ok": False, "message": "Use a PNG, JPEG or WebP image."}
+            for old_ext in _CUSTOM_THEME_IMAGE_TYPES:
+                try:
+                    (DATA_DIR / f"{_CUSTOM_THEME_IMAGE_PREFIX}{old_ext}").unlink(missing_ok=True)
+                except Exception:
+                    pass
+            target = DATA_DIR / f"{_CUSTOM_THEME_IMAGE_PREFIX}{ext}"
+            temporary = target.with_suffix(target.suffix + ".part")
+            temporary.write_bytes(raw)
+            temporary.replace(target)
+            patch["custom_theme_image"] = target.name
+
+        _save_settings(patch)
+        return custom_theme_state()
+    except Exception as exc:
+        log(f"Custom theme save error: {exc}")
+        return {"ok": False, "message": str(exc)}
 
 
 def save_api_key(key):
@@ -671,11 +805,13 @@ def _assign_to_job(job, pid):
 
 
 class ASFProcess:
-    def __init__(self, exe, extra_args=None):
+    def __init__(self, exe, extra_args=None, use_job_object=False):
         self.exe = exe
         self.extra_args = extra_args or []
+        self.use_job_object = bool(use_job_object)
         self.proc = None
         self.job = None
+        self.replaced_by_self_update = False
 
     def start(self):
         # Important: do not pass --NO-RESTART. During self-update ASF terminates
@@ -688,29 +824,57 @@ class ASFProcess:
         log(f"Запуск ASF: {' '.join(cmd)}")
         log(f"  рабочая папка: {Path(self.exe).parent}")
         try:
-            kwargs = dict(
-                cwd=str(Path(self.exe).parent),
-                creationflags=flags,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            if os.name != "nt":
-                kwargs["start_new_session"] = True
-            self.proc = subprocess.Popen(cmd, **kwargs)
-            log(f"  ASF PID: {self.proc.pid}")
+            launch_log = DATA_DIR / "asf-launch.log"
+            launch_log.parent.mkdir(parents=True, exist_ok=True)
+            with open(launch_log, "ab", buffering=0) as output:
+                output.write((f"\n=== ASF launch {time.strftime('%Y-%m-%d %H:%M:%S')} ===\n").encode("utf-8"))
+                kwargs = dict(
+                    cwd=str(Path(self.exe).parent),
+                    creationflags=flags,
+                    stdin=subprocess.DEVNULL,
+                    stdout=output,
+                    stderr=subprocess.STDOUT,
+                )
+                if os.name != "nt":
+                    kwargs["start_new_session"] = True
+                self.proc = subprocess.Popen(cmd, **kwargs)
+            self.replaced_by_self_update = False
+            log(f"  ASF PID: {self.proc.pid}; startup output: {launch_log}")
 
-            if os.name == "nt":
+            # A kill-on-close Job Object can prevent a new ASF executable from
+            # breaking away during ASF self-update. It is opt-in for this reason.
+            if os.name == "nt" and self.use_job_object:
                 self.job = _create_kill_job()
                 if self.job and _assign_to_job(self.job, self.proc.pid):
-                    log("  ASF привязан к Job Object (убьётся вместе с приложением).")
+                    log("  ASF attached to Job Object (explicitly enabled).")
                 else:
-                    log("  ВНИМАНИЕ: Job Object не назначен, используется taskkill.")
+                    log("  Job Object was not assigned; taskkill fallback will be used.")
         except Exception as e:
             log(f"  ОШИБКА запуска ASF: {e}")
 
     def alive(self):
-        return self.proc is not None and self.proc.poll() is None
+        return self.replaced_by_self_update or (self.proc is not None and self.proc.poll() is None)
+
+    def mark_self_update_successor(self):
+        self.replaced_by_self_update = True
+
+    def _stop_self_update_successor(self):
+        """Stop the replacement process when ASF restarted itself outside Popen's PID."""
+        if os.name != "nt":
+            return
+        try:
+            target = _ps_quote(str(Path(self.exe).resolve()))
+            script = (
+                "$target=" + target + "; "
+                "Get-CimInstance Win32_Process -Filter \"Name='ArchiSteamFarm.exe'\" | "
+                "Where-Object { $_.ExecutablePath -eq $target } | "
+                "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
+            )
+            subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), timeout=15,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        except Exception as exc:
+            log(f"ASF successor stop error: {exc}")
 
     def restart(self):
         old_pid = self.proc.pid if self.proc else None
@@ -729,6 +893,10 @@ class ASFProcess:
             return
         pid = self.proc.pid
         if self.proc.poll() is not None:
+            if self.replaced_by_self_update:
+                log("Stopping ASF self-update successor...")
+                self._stop_self_update_successor()
+            self.replaced_by_self_update = False
             self._close_job()
             return
         log(f"Остановка ASF (PID {pid})...")
@@ -1317,7 +1485,401 @@ try {{
         return {"ok": False, "message": str(e)}
 
 
-def make_handler(ui_path, asf_host, asf_port, inject, stats_provider=None, exit_callback=None):
+
+def _valid_plugin_catalog(payload):
+    """Validate the remotely maintained BetterASF plugin catalogue."""
+    raw = payload.get("plugins") if isinstance(payload, dict) else payload
+    if not isinstance(raw, list):
+        return None
+    result = []
+    seen = set()
+    for entry in raw[:30]:
+        if not isinstance(entry, dict):
+            return None
+        plugin_id = str(entry.get("id") or "").strip()
+        name = str(entry.get("name") or "").strip()
+        repository = str(entry.get("repository") or "").strip()
+        if (not plugin_id or not name or not repository or plugin_id in seen or
+                not all(ch.isalnum() or ch in "-_." for ch in plugin_id) or
+                repository.count("/") != 1 or
+                not all(ch.isalnum() or ch in "-_./" for ch in repository)):
+            return None
+        source = {
+            "id": plugin_id,
+            "name": name[:120],
+            "repository": repository,
+            "description": str(entry.get("description") or "").strip()[:800],
+        }
+        prefix = str(entry.get("asset_prefix") or "").strip()
+        if prefix:
+            source["asset_prefix"] = prefix[:160]
+        result.append(source)
+        seen.add(plugin_id)
+    return tuple(result) if result else None
+
+
+def _packaged_plugin_catalog():
+    for path in (RES_DIR / PLUGIN_CATALOG_FILENAME, APP_DIR / PLUGIN_CATALOG_FILENAME, HERE / PLUGIN_CATALOG_FILENAME):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            sources = _valid_plugin_catalog(data)
+            if sources:
+                return sources
+        except Exception:
+            continue
+    return tuple(DEFAULT_PLUGIN_STORE_SOURCES)
+
+
+def _read_catalog_cache():
+    try:
+        data = json.loads(PLUGIN_CATALOG_CACHE_FILE.read_text(encoding="utf-8"))
+        sources = _valid_plugin_catalog(data)
+        if sources:
+            return str(data.get("etag") or ""), sources
+    except Exception:
+        pass
+    return "", _packaged_plugin_catalog()
+
+
+def _write_catalog_cache(etag, sources):
+    try:
+        payload = {"etag": str(etag or ""), "plugins": list(sources)}
+        PLUGIN_CATALOG_CACHE_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception as exc:
+        log(f"Plugin catalogue cache write error: {exc}")
+
+
+def load_plugin_catalog():
+    """Conditionally refresh the catalogue only when BetterASF's file changed."""
+    global PLUGIN_STORE_SOURCES
+    with _PLUGIN_CATALOG_LOCK:
+        if not _PLUGIN_CATALOG_STATE["loaded"]:
+            etag, sources = _read_catalog_cache()
+            _PLUGIN_CATALOG_STATE.update({"loaded": True, "etag": etag, "sources": sources})
+            PLUGIN_STORE_SOURCES = sources
+
+        previous = _PLUGIN_CATALOG_STATE["sources"]
+        previous_etag = _PLUGIN_CATALOG_STATE["etag"]
+        headers = {"User-Agent": f"{APP_NAME}/{APP_VERSION} plugin-catalog", "Accept": "application/json"}
+        if _PLUGIN_CATALOG_STATE["etag"]:
+            headers["If-None-Match"] = _PLUGIN_CATALOG_STATE["etag"]
+        try:
+            request = urllib.request.Request(PLUGIN_CATALOG_URL, headers=headers)
+            with urllib.request.urlopen(request, timeout=12) as response:
+                payload = json.loads(response.read().decode("utf-8", "ignore"))
+                sources = _valid_plugin_catalog(payload)
+                if not sources:
+                    raise ValueError("Plugin catalogue format is invalid")
+                etag = response.headers.get("ETag") or ""
+        except urllib.error.HTTPError as exc:
+            # 304 means that the catalogue is unchanged, which is the normal
+            # fast path when the store is opened repeatedly.
+            if exc.code == 304:
+                return previous, False, True
+            return previous, False, False
+        except Exception as exc:
+            log(f"Plugin catalogue refresh error: {exc}")
+            return previous, False, False
+
+        changed = sources != previous
+        _PLUGIN_CATALOG_STATE.update({"etag": etag, "sources": sources})
+        PLUGIN_STORE_SOURCES = sources
+        if changed:
+            with _PLUGIN_STORE_LOCK:
+                _PLUGIN_STORE_CACHE.update({"at": 0.0, "items": [], "error": ""})
+            _write_catalog_cache(etag, sources)
+            log(f"Plugin catalogue updated: {len(sources)} entries.")
+        elif etag and etag != previous_etag:
+            _write_catalog_cache(etag, sources)
+        return sources, changed, False
+
+
+def _github_json(url, timeout=15):
+    request = urllib.request.Request(url, headers={
+        "User-Agent": f"{APP_NAME}/{APP_VERSION} plugin-store",
+        "Accept": "application/vnd.github+json",
+    })
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8", "ignore"))
+
+
+def _catalog_asset(release, source):
+    prefix = str(source.get("asset_prefix") or "").lower()
+    assets = release.get("assets") or []
+    candidates = []
+    for asset in assets:
+        name = str(asset.get("name") or "")
+        lower = name.lower()
+        if not lower.endswith(".zip") or not asset.get("browser_download_url"):
+            continue
+        if prefix and not lower.startswith(prefix):
+            continue
+        candidates.append(asset)
+    if not candidates and not prefix:
+        candidates = [a for a in assets if str(a.get("name") or "").lower().endswith(".zip") and a.get("browser_download_url")]
+    return candidates[0] if candidates else None
+
+
+def get_plugin_store(force=False):
+    """Read plugin data from GitHub only after the catalogue itself changed."""
+    sources, catalogue_changed, catalogue_unchanged = load_plugin_catalog()
+    now = time.time()
+    with _PLUGIN_STORE_LOCK:
+        # A conditional request to plugin_catalog.json happened above. Release
+        # requests are skipped when its ETag/content is unchanged.
+        if not catalogue_changed and _PLUGIN_STORE_CACHE["items"]:
+            return {"ok": True, "items": _PLUGIN_STORE_CACHE["items"], "cached": True, "catalogueUnchanged": catalogue_unchanged}
+
+    items = []
+    errors = []
+    for source in sources:
+        item = dict(source)
+        repository = source["repository"]
+        try:
+            # Name/description and current ZIP release are received from the
+            # developer's GitHub repository. Five catalogue entries and the
+            # one-hour cache keep us under GitHub's anonymous API limit.
+            repo = _github_json(f"https://api.github.com/repos/{repository}")
+            release = _github_json(f"https://api.github.com/repos/{repository}/releases/latest")
+            asset = _catalog_asset(release, source)
+            item.update({
+                "name": source["name"] if source.get("asset_prefix") else (repo.get("name") or source["name"]),
+                "description": source["description"] if source.get("asset_prefix") else (repo.get("description") or source["description"]),
+                "repositoryUrl": repo.get("html_url") or f"https://github.com/{repository}",
+                "author": (repo.get("owner") or {}).get("login") or repository.split("/", 1)[0],
+                "stars": int(repo.get("stargazers_count") or 0),
+                "version": release.get("tag_name") or "—",
+                "releaseUrl": release.get("html_url") or f"https://github.com/{repository}",
+                "available": bool(asset),
+                "assetName": asset.get("name") if asset else "",
+            })
+        except Exception as exc:
+            item.update({
+                "repositoryUrl": f"https://github.com/{repository}",
+                "author": repository.split("/", 1)[0],
+                "version": "—",
+                "available": False,
+                "error": str(exc),
+            })
+            errors.append(f"{item['name']}: {exc}")
+        items.append(item)
+
+    with _PLUGIN_STORE_LOCK:
+        _PLUGIN_STORE_CACHE.update({"at": now, "items": items, "error": "; ".join(errors[:2])})
+    return {"ok": True, "items": items, "cached": False, "warning": "; ".join(errors[:2])}
+
+
+def get_popular_games(force=False):
+    """Return Steam's current global most-played list without using a user API key."""
+    now = time.time()
+    with _POPULAR_GAMES_LOCK:
+        if not force and _POPULAR_GAMES_CACHE["games"] and now - _POPULAR_GAMES_CACHE["at"] < 10 * 60:
+            return {"ok": True, "games": _POPULAR_GAMES_CACHE["games"], "cached": True}
+    try:
+        data = _github_json("https://api.steampowered.com/ISteamChartsService/GetMostPlayedGames/v1/", timeout=12)
+        ranks = (data.get("response") or {}).get("ranks") or []
+        games = []
+        for rank in ranks:
+            try:
+                app_id = int(rank.get("appid"))
+            except Exception:
+                continue
+            if app_id > 0:
+                games.append({"appID": app_id, "rank": int(rank.get("rank") or len(games) + 1), "players": int(rank.get("peak_in_game") or 0)})
+        if not games:
+            raise RuntimeError("Steam returned an empty popularity list")
+        with _POPULAR_GAMES_LOCK:
+            _POPULAR_GAMES_CACHE.update({"at": now, "games": games, "error": ""})
+        return {"ok": True, "games": games, "cached": False}
+    except Exception as exc:
+        log(f"Steam popularity list error: {exc}")
+        return {"ok": False, "games": [], "message": str(exc)}
+
+
+class ASFPluginManager:
+    """Installs signed-by-source ZIP release assets into ASF's plugins folder safely."""
+    MAX_DOWNLOAD_BYTES = 128 * 1024 * 1024
+    MAX_UNPACKED_BYTES = 384 * 1024 * 1024
+    MAX_ARCHIVE_MEMBERS = 4000
+
+    def __init__(self, runtime_dir_provider, maintenance_runner=None):
+        self.runtime_dir_provider = runtime_dir_provider
+        self.maintenance_runner = maintenance_runner
+        self.lock = threading.RLock()
+
+    def _runtime_dir(self):
+        runtime = self.runtime_dir_provider() if self.runtime_dir_provider else None
+        return Path(runtime).resolve() if runtime else None
+
+    @staticmethod
+    def _safe_name(value):
+        value = "".join(ch for ch in str(value or "") if ch.isalnum() or ch in "-_.")
+        return value.strip(".")[:96]
+
+    def _plugins_dir(self):
+        runtime = self._runtime_dir()
+        if not runtime:
+            raise RuntimeError("ASF runtime is not available yet")
+        target = runtime / "plugins"
+        target.mkdir(parents=True, exist_ok=True)
+        return target.resolve()
+
+    @staticmethod
+    def _assembly_plugin_name(dlls):
+        """Infer a public plugin name from ASF's known assembly names."""
+        for dll in dlls:
+            key = "".join(ch for ch in dll.stem.lower() if ch.isalnum())
+            if key in OFFICIAL_PLUGIN_DISPLAY_NAMES:
+                return OFFICIAL_PLUGIN_DISPLAY_NAMES[key]
+        # A resource assembly is not the plugin itself. Prefer the main DLL when
+        # a manually installed plugin has no IPC data available yet.
+        for dll in dlls:
+            if not dll.stem.lower().endswith(".resources"):
+                return dll.stem
+        return ""
+
+    def library(self):
+        try:
+            root = self._plugins_dir()
+        except Exception as exc:
+            return {"ok": False, "items": [], "message": str(exc)}
+        catalog_ids = {self._safe_name(x["id"]): x for x in PLUGIN_STORE_SOURCES}
+        items = []
+        try:
+            for path in sorted(root.iterdir(), key=lambda x: x.name.lower()):
+                if not path.is_dir():
+                    continue
+                dlls = list(path.rglob("*.dll"))
+                source = catalog_ids.get(path.name)
+                # Do not expose the technical folder/assembly name as the plugin
+                # title. ASF's API in the UI will override this fallback further.
+                inferred_name = self._assembly_plugin_name(dlls)
+                items.append({
+                    "id": path.name,
+                    "name": source["name"] if source else (inferred_name or "Plugin"),
+                    "directory": path.name,
+                    "managed": bool(source),
+                    "assemblyNames": [dll.name for dll in dlls if not dll.stem.lower().endswith(".resources")],
+                    "files": len(dlls),
+                    "size": sum(x.stat().st_size for x in path.rglob("*") if x.is_file()),
+                })
+        except Exception as exc:
+            return {"ok": False, "items": [], "message": str(exc)}
+        return {"ok": True, "items": items, "runtime": str(root.parent)}
+
+    @staticmethod
+    def _download_asset(asset, target):
+        url = asset.get("browser_download_url")
+        if not url:
+            raise RuntimeError("The GitHub release does not provide a ZIP asset")
+        request = urllib.request.Request(url, headers={"User-Agent": f"{APP_NAME}/{APP_VERSION} plugin-store"})
+        digest = hashlib.sha256()
+        count = 0
+        with urllib.request.urlopen(request, timeout=60) as response, open(target, "wb") as out:
+            while True:
+                block = response.read(1024 * 256)
+                if not block:
+                    break
+                count += len(block)
+                if count > ASFPluginManager.MAX_DOWNLOAD_BYTES:
+                    raise RuntimeError("Plugin archive is larger than the 128 MB safety limit")
+                digest.update(block)
+                out.write(block)
+        expected = str(asset.get("digest") or "")
+        if expected.lower().startswith("sha256:") and digest.hexdigest().lower() != expected.split(":", 1)[1].lower():
+            raise RuntimeError("GitHub release asset SHA-256 verification failed")
+
+    @classmethod
+    def _extract_archive(cls, archive_path, staging):
+        with zipfile.ZipFile(archive_path) as archive:
+            members = [x for x in archive.infolist() if not x.is_dir()]
+            if len(members) > cls.MAX_ARCHIVE_MEMBERS:
+                raise RuntimeError("Plugin archive contains too many files")
+            total = sum(max(0, x.file_size) for x in members)
+            if total > cls.MAX_UNPACKED_BYTES:
+                raise RuntimeError("Plugin archive exceeds the 384 MB unpacked safety limit")
+            root = staging.resolve()
+            for member in members:
+                destination = (root / member.filename).resolve()
+                try:
+                    destination.relative_to(root)
+                except ValueError:
+                    raise RuntimeError("Unsafe path found in plugin archive")
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                with archive.open(member) as inp, open(destination, "wb") as out:
+                    shutil.copyfileobj(inp, out)
+        folders = [x for x in staging.iterdir() if x.is_dir()]
+        files = [x for x in staging.iterdir() if x.is_file()]
+        # Release ZIPs normally have one outer directory. Remove only that wrapper.
+        if len(folders) == 1 and not files:
+            return folders[0]
+        return staging
+
+    def _run_maintenance(self, operation):
+        if self.maintenance_runner:
+            return self.maintenance_runner(operation)
+        return operation()
+
+    def install(self, plugin_id):
+        load_plugin_catalog()
+        plugin_id = self._safe_name(plugin_id)
+        source = next((x for x in PLUGIN_STORE_SOURCES if x["id"] == plugin_id), None)
+        if not source:
+            return {"ok": False, "message": "Unknown plugin catalogue identifier."}
+        with self.lock:
+            try:
+                release = _github_json(f"https://api.github.com/repos/{source['repository']}/releases/latest")
+                asset = _catalog_asset(release, source)
+                if not asset:
+                    return {"ok": False, "message": "No compatible ZIP asset was found in the latest GitHub release."}
+                with tempfile.TemporaryDirectory(prefix="betterasf-plugin-", dir=str(DATA_DIR)) as tmp:
+                    tmp_path = Path(tmp)
+                    archive = tmp_path / "plugin.zip"
+                    self._download_asset(asset, archive)
+                    unpacked = self._extract_archive(archive, tmp_path / "unpacked")
+                    if not list(unpacked.rglob("*.dll")):
+                        return {"ok": False, "message": "The GitHub ZIP does not contain a plugin DLL; it was not installed."}
+                    root = self._plugins_dir()
+                    destination = root / plugin_id
+                    def replace_plugin():
+                        backup = root / f".{plugin_id}.backup"
+                        if backup.exists():
+                            shutil.rmtree(backup, ignore_errors=True)
+                        if destination.exists():
+                            destination.replace(backup)
+                        try:
+                            shutil.copytree(unpacked, destination)
+                        except Exception:
+                            if backup.exists() and not destination.exists():
+                                backup.replace(destination)
+                            raise
+                        shutil.rmtree(backup, ignore_errors=True)
+                        return {"ok": True, "message": f"{source['name']} installed. ASF was restarted to load it.", "restartRequired": False}
+                    return self._run_maintenance(replace_plugin)
+            except Exception as exc:
+                log(f"Plugin install error ({plugin_id}): {exc}")
+                return {"ok": False, "message": str(exc)}
+
+    def remove(self, directory):
+        directory = self._safe_name(directory)
+        if not directory:
+            return {"ok": False, "message": "Invalid plugin directory."}
+        with self.lock:
+            try:
+                root = self._plugins_dir()
+                target = (root / directory).resolve()
+                target.relative_to(root)
+                if not target.exists() or not target.is_dir():
+                    return {"ok": False, "message": "Plugin directory was not found."}
+                def remove_plugin():
+                    shutil.rmtree(target)
+                    return {"ok": True, "message": "Plugin removed. ASF was restarted."}
+                return self._run_maintenance(remove_plugin)
+            except Exception as exc:
+                log(f"Plugin removal error ({directory}): {exc}")
+                return {"ok": False, "message": str(exc)}
+
+def make_handler(ui_path, asf_host, asf_port, inject, stats_provider=None, exit_callback=None, plugin_manager=None):
     class Handler(http.server.BaseHTTPRequestHandler):
         timeout = 10
         good_host = None
@@ -1443,6 +2005,31 @@ def make_handler(ui_path, asf_host, asf_port, inject, stats_provider=None, exit_
             }
             self._send_bytes(json.dumps(info).encode(), "application/json")
 
+        def _custom_theme_image(self):
+            image = _custom_theme_image_path()
+            if not image:
+                self.send_error(404)
+                return
+            try:
+                self._send_bytes(image.read_bytes(), _CUSTOM_THEME_IMAGE_TYPES.get(image.suffix.lower(), "application/octet-stream"))
+            except Exception:
+                self.send_error(404)
+
+        def _custom_theme(self):
+            if self.command == "GET":
+                self._send_bytes(json.dumps(custom_theme_state()).encode(), "application/json")
+                return
+            try:
+                length = int(self.headers.get("Content-Length", 0) or 0)
+                if length > _CUSTOM_THEME_MAX_BYTES * 2:
+                    raise ValueError("Request is too large")
+                payload = json.loads(self.rfile.read(length).decode("utf-8", "ignore") or "{}")
+            except Exception as exc:
+                self._send_bytes(json.dumps({"ok": False, "message": str(exc)}).encode(), "application/json", 400)
+                return
+            result = save_custom_theme(payload)
+            self._send_bytes(json.dumps(result).encode(), "application/json", 200 if result.get("ok") else 400)
+
         def _settings(self):
             if self.command == "GET":
                 data = _load_settings()
@@ -1453,6 +2040,8 @@ def make_handler(ui_path, asf_host, asf_port, inject, stats_provider=None, exit_
                     "auto_hour_farm_after_cards": bool(data.get("auto_hour_farm_after_cards", False)),
                     "start_hour_farm_on_launch": bool(data.get("start_hour_farm_on_launch", False)),
                     "launch_minimized": bool(data.get("launch_minimized", False)),
+                    "language": str(data.get("language", "ru") or "ru"),
+                    "hour_farm_priority_mode": str(data.get("hour_farm_priority_mode", "hours_desc") or "hours_desc"),
                     "priority_hour_farm_appids": str(data.get("priority_hour_farm_appids", "") or ""),
                     "hour_farm_max_games_by_bot": data.get("hour_farm_max_games_by_bot", {}) if isinstance(data.get("hour_farm_max_games_by_bot", {}), dict) else {},
                     "steam_api_key": bool((RUNTIME.get("steam_api_key") or data.get("steam_api_key") or "").strip()),
@@ -1473,6 +2062,10 @@ def make_handler(ui_path, asf_host, asf_port, inject, stats_provider=None, exit_
                     ok = bool(set_autostart_enabled(bool(value))) and ok
                 elif key in ("minimize_to_tray", "economy_mode", "auto_hour_farm_after_cards", "start_hour_farm_on_launch", "launch_minimized"):
                     set_app_setting(key, bool(value))
+                elif key == "language" and value in ("ru", "en", "uk"):
+                    set_app_setting(key, value)
+                elif key == "hour_farm_priority_mode" and value in ("hours_asc", "hours_desc", "popular"):
+                    set_app_setting(key, value)
                 elif key == "theme" and value in ("dark", "light"):
                     save_theme(value)
                 elif key == "priority_hour_farm_appids":
@@ -1580,6 +2173,10 @@ def make_handler(ui_path, asf_host, asf_port, inject, stats_provider=None, exit_
                 self._send_bytes(json.dumps(check_github_update()).encode(), "application/json")
             elif self.path.startswith("/__settings"):
                 self._settings()
+            elif self.path.startswith("/__custom_theme/image"):
+                self._custom_theme_image()
+            elif self.path.startswith("/__custom_theme"):
+                self._custom_theme()
             elif self.path.startswith("/__appstats"):
                 try:
                     info = stats_provider() if stats_provider else app_memory_stats(None)
@@ -1588,6 +2185,14 @@ def make_handler(ui_path, asf_host, asf_port, inject, stats_provider=None, exit_
                 self._send_bytes(json.dumps(info).encode(), "application/json")
             elif self.path.startswith("/__games"):
                 self._games()
+            elif self.path.startswith("/__popular_games"):
+                self._send_bytes(json.dumps(get_popular_games()).encode(), "application/json")
+            elif self.path.startswith("/__plugins/library"):
+                result = plugin_manager.library() if plugin_manager else {"ok": False, "items": [], "message": "Plugin manager is unavailable."}
+                self._send_bytes(json.dumps(result).encode(), "application/json", 200 if result.get("ok") else 503)
+            elif self.path.startswith("/__plugins/store"):
+                refresh_store = "refresh=1" in self.path or "force=1" in self.path
+                self._send_bytes(json.dumps(get_plugin_store(force=refresh_store)).encode(), "application/json")
             elif self.path.startswith("/Api/"):
                 self._proxy("GET")
             else:
@@ -1596,9 +2201,24 @@ def make_handler(ui_path, asf_host, asf_port, inject, stats_provider=None, exit_
         def do_POST(self):
             if self.path.startswith("/__settings"):
                 self._settings()
+            elif self.path.startswith("/__custom_theme"):
+                self._custom_theme()
             elif self.path.startswith("/__install_update"):
                 result = install_github_update(exit_callback)
                 self._send_bytes(json.dumps(result).encode(), "application/json", 200 if result.get("ok") else 500)
+            elif self.path.startswith("/__plugins/install") or self.path.startswith("/__plugins/remove"):
+                try:
+                    length = int(self.headers.get("Content-Length", 0) or 0)
+                    payload = json.loads(self.rfile.read(length).decode("utf-8", "ignore") or "{}")
+                except Exception:
+                    payload = {}
+                if not plugin_manager:
+                    result = {"ok": False, "message": "Plugin manager is unavailable."}
+                elif self.path.startswith("/__plugins/install"):
+                    result = plugin_manager.install(payload.get("id"))
+                else:
+                    result = plugin_manager.remove(payload.get("directory"))
+                self._send_bytes(json.dumps(result).encode(), "application/json", 200 if result.get("ok") else 400)
             elif self.path.startswith("/__exit"):
                 self._send_bytes(json.dumps({"ok": True}).encode(), "application/json")
                 if exit_callback:
@@ -1625,8 +2245,8 @@ class ThreadingServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     allow_reuse_address = True
 
 
-def start_local_server(ui_path, asf_host, asf_port, inject, want_port=0, stats_provider=None, exit_callback=None):
-    handler = make_handler(ui_path, asf_host, asf_port, inject, stats_provider, exit_callback)
+def start_local_server(ui_path, asf_host, asf_port, inject, want_port=0, stats_provider=None, exit_callback=None, plugin_manager=None):
+    handler = make_handler(ui_path, asf_host, asf_port, inject, stats_provider, exit_callback, plugin_manager)
     httpd = ThreadingServer(("127.0.0.1", want_port), handler)
     port = httpd.server_address[1]
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
@@ -2011,6 +2631,8 @@ class Bridge:
             "auto_hour_farm_after_cards": bool(data.get("auto_hour_farm_after_cards", False)),
             "start_hour_farm_on_launch": bool(data.get("start_hour_farm_on_launch", False)),
             "launch_minimized": bool(data.get("launch_minimized", False)),
+            "language": str(data.get("language", "ru") or "ru"),
+            "hour_farm_priority_mode": str(data.get("hour_farm_priority_mode", "hours_desc") or "hours_desc"),
             "priority_hour_farm_appids": str(data.get("priority_hour_farm_appids", "") or ""),
             "hour_farm_max_games_by_bot": data.get("hour_farm_max_games_by_bot", {}) if isinstance(data.get("hour_farm_max_games_by_bot", {}), dict) else {},
         }
@@ -2032,6 +2654,12 @@ class Bridge:
             return True
         if key == "launch_minimized":
             set_app_setting(key, bool(value))
+            return True
+        if key == "language" and value in ("ru", "en", "uk"):
+            set_app_setting(key, value)
+            return True
+        if key == "hour_farm_priority_mode" and value in ("hours_asc", "hours_desc", "popular"):
+            set_app_setting(key, value)
             return True
         return False
 
@@ -2126,7 +2754,8 @@ def main():
     exit_event = threading.Event()
     start_memory_trim_thread(cfg, asf_holder)
 
-    start_lock = threading.Lock()
+    start_lock = threading.RLock()
+    plugin_operation = threading.Event()
 
     def set_asf_status(status, message=""):
         RUNTIME["asf_status"] = status
@@ -2147,8 +2776,10 @@ def main():
                 except Exception:
                     pass
                 asf_holder["proc"] = None
-            if force_reinstall:
-                reset_embedded_asf_runtime()
+            # Never erase a self-updated ASF runtime automatically. New ASF versions
+            # deliberately replace their own files and can take time to relaunch.
+            # A destructive reset here was the reason a successful update could be
+            # overwritten by the bundled, older runtime.
 
             exe = None
             try:
@@ -2163,7 +2794,8 @@ def main():
                     enable_betterasf_group(exe)
                 except Exception as e:
                     log(f"Ошибка настройки подписки на BetterASF: {e}")
-                proc = ASFProcess(exe)
+                use_job = str(cfg.get("asf_use_job_object", "false")).lower() in ("1", "true", "yes", "on")
+                proc = ASFProcess(exe, use_job_object=use_job)
                 proc.start()
                 asf_holder["proc"] = proc
                 set_asf_status("starting", f"ASF process started ({reason}).")
@@ -2194,40 +2826,73 @@ def main():
             log(f"ТАЙМАУТ: IPC {host}:{port} не поднялся за {timeout}с.")
         return False
 
+    def run_plugin_maintenance(operation):
+        """Apply a plugin change while ASF is stopped, then start it once again."""
+        with start_lock:
+            plugin_operation.set()
+            set_asf_status("recovering", "Applying plugin changes and restarting ASF...")
+            try:
+                old = asf_holder.get("proc")
+                if old:
+                    old.stop()
+                asf_holder["proc"] = None
+                result = operation()
+                if result.get("ok"):
+                    start_asf_process(False, "plugin_change")
+                return result
+            finally:
+                plugin_operation.clear()
+
     def asf_supervisor():
         if str(cfg["start_asf"]).lower() not in ("1", "true", "yes", "on"):
             return
         timeout = int(cfg["startup_timeout"])
+        try:
+            self_restart_grace = max(15, int(cfg.get("asf_self_restart_grace", "90") or 90))
+        except Exception:
+            self_restart_grace = 90
         start_asf_process(False, "startup")
         wait_for_asf_ipc(timeout)
         while not exit_event.is_set():
+            if plugin_operation.is_set():
+                time.sleep(1.0)
+                continue
             proc = asf_holder.get("proc")
             if proc is None:
-                set_asf_status("recovering", "ASF process is missing. Restarting...")
-                start_asf_process(True, "missing_process")
+                set_asf_status("recovering", "ASF process is missing. Starting the existing runtime...")
+                start_asf_process(False, "missing_process")
                 wait_for_asf_ipc(timeout)
             elif not proc.alive():
-                set_asf_status("recovering", "ASF process exited. Waiting for possible self-restart...")
-                log("ASF process exited while BetterASF is still running. Waiting 8s before runtime recovery.")
-                recovered_by_self = False
-                for _ in range(8):
-                    if exit_event.is_set():
+                # ASF exits its old PID during a self-update, then starts a new PID.
+                # The update may need substantially longer than 8 seconds on slow disks.
+                set_asf_status("recovering", "Waiting for ASF self-update restart...")
+                log(f"ASF launcher PID exited. Waiting up to {self_restart_grace}s for its self-update successor; runtime will be preserved.")
+                successor_ready = False
+                for _ in range(self_restart_grace):
+                    if exit_event.is_set() or plugin_operation.is_set():
                         return
                     if ipc_ready(host, port):
-                        set_asf_status("online", "ASF IPC is available after self-restart.")
-                        recovered_by_self = True
+                        set_asf_status("online", "ASF IPC is available after self-update restart.")
+                        proc.mark_self_update_successor()
+                        log("ASF self-update successor opened IPC successfully.")
+                        successor_ready = True
                         break
                     time.sleep(1.0)
-                if recovered_by_self:
-                    continue
-                set_asf_status("recovering", "ASF crashed. Restoring bundled runtime...")
-                log("ASF did not recover by itself. Removing ASF-runtime and extracting bundled ASF again.")
-                start_asf_process(True, "process_exit")
-                wait_for_asf_ipc(timeout)
+                if not successor_ready:
+                    # Try the currently updated runtime once, without deleting it.
+                    set_asf_status("recovering", "ASF did not restart itself. Trying the current runtime without reset...")
+                    log("ASF successor did not open IPC. Restarting the current runtime without deleting ASF-runtime.")
+                    start_asf_process(False, "after_self_update")
+                    wait_for_asf_ipc(timeout)
             else:
                 if ipc_ready(host, port):
                     if RUNTIME.get("asf_status") != "online":
                         set_asf_status("online", "ASF IPC is available.")
+                elif proc.replaced_by_self_update:
+                    # We only assume the new PID is alive while its IPC endpoint is
+                    # alive. Once it disappears, return to normal failure handling.
+                    proc.replaced_by_self_update = False
+                    set_asf_status("recovering", "ASF self-update successor lost IPC. Checking restart...")
                 elif RUNTIME.get("asf_status") == "online":
                     set_asf_status("starting", "ASF process is alive, IPC is temporarily unavailable.")
             time.sleep(2.0)
@@ -2259,6 +2924,15 @@ def main():
         log(f"ОШИБКА: не найдена папка интерфейса: {UI_DIR}")
         sys.exit(1)
 
+    def plugin_runtime_dir():
+        process = asf_holder.get("proc")
+        if process and process.exe:
+            return str(Path(process.exe).parent)
+        existing = find_asf_executable(cfg.get("asf_path", ""))
+        return str(Path(existing).parent) if existing else None
+
+    plugin_manager = ASFPluginManager(plugin_runtime_dir, run_plugin_maintenance)
+
     try:
         httpd, ui_port = start_local_server(
             UI_DIR, host, port, inject, int(cfg["ui_port"]),
@@ -2268,6 +2942,7 @@ def main():
                 include_orphan_webview2=str(cfg.get("memory_include_orphan_webview2", "true")).lower() in ("1", "true", "yes", "on"),
             ),
             exit_callback=lambda: exit_event.set(),
+            plugin_manager=plugin_manager,
         )
     except Exception as e:
         log(f"Не удалось запустить локальный сервер: {e}")

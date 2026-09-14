@@ -56,18 +56,14 @@ echo [4/4] Done.
 echo.
 echo   Result:  dist\BetterASF.exe
 echo.
-echo   PORTABLE use: copy dist\BetterASF.exe anywhere and run it.
-echo     On first run it creates (next to the exe):
-echo       ASF-runtime\   (unpacked ASF - managed automatically)
-echo       config\        (YOUR accounts - keep/backup this folder)
+echo   Run dist\BetterASF.exe once to install it to Program Files\BetterASF.
+echo   Desktop and Start Menu shortcuts are created automatically.
 echo.
-echo   INSTALLER (Program Files + shortcuts):
-echo     1) Install Inno Setup (free): https://jrsoftware.org/isdl.php
-echo     2) Open installer.iss in Inno Setup and press Build
-echo        (or run:  ISCC installer.iss )
-echo     3) Result: Output\ASF-Desktop-Setup.exe
-echo     When installed, accounts are stored in Documents\ASF-Desktop.
+echo   User data is kept outside the executable in:
+echo     Documents\BetterASF\config\       (accounts - keep/backup this folder)
+echo     Documents\BetterASF\ASF-runtime\  (ASF runtime, managed automatically)
 echo.
+echo   There is no separate installer. Publish the single dist\BetterASF.exe file.
 pause
 goto END
 
