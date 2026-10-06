@@ -26,7 +26,7 @@ except Exception:
 
 HERE = Path(__file__).resolve().parent
 APP_NAME = "BetterASF"
-APP_VERSION = "3.0"
+APP_VERSION = "4.0"
 GITHUB_REPO = "CatYaderka/BetterASF"
 
 
