@@ -8,6 +8,8 @@
 </head>
 <body>
 
+<video id="custom-theme-video" muted loop playsinline preload="metadata" aria-hidden="true"></video>
+
 <header id="titlebar">
   <div class="tb-left pywebview-drag-region">
     <span class="tb-dot"></span>
@@ -19,9 +21,9 @@
       <span class="ico-moon">&#9789;</span><span class="ico-sun" style="display:none">&#9728;</span>
     </button>
     <div class="win-controls">
-      <button class="tb-btn" id="minBtn" title="Свернуть">&#8211;</button>
-      <button class="tb-btn" id="maxBtn" title="Развернуть">&#9633;</button>
-      <button class="tb-btn close" id="closeBtn" title="Закрыть">&#10005;</button>
+      <button class="tb-btn" id="minBtn" title="Свернуть" aria-label="Свернуть"><svg class="window-control-icon" viewBox="0 0 24 24" fill="none"><path d="M5 12.5h14"/></svg></button>
+      <button class="tb-btn" id="maxBtn" title="Развернуть" aria-label="Развернуть"><svg class="window-control-icon" viewBox="0 0 24 24" fill="none"><path d="M6.5 6.5h11v11h-11z"/></svg></button>
+      <button class="tb-btn close" id="closeBtn" title="Закрыть" aria-label="Закрыть"><svg class="window-control-icon" viewBox="0 0 24 24" fill="none"><path d="m7.5 7.5 9 9m0-9-9 9"/></svg></button>
     </div>
   </div>
 </header>
@@ -29,6 +31,9 @@
 <div class="app">
 
   <nav class="sidebar">
+    <button class="sidebar-expand" id="sidebar-expand" type="button" data-i18n-title="sidebar_expand" title="Развернуть меню" aria-label="Развернуть меню">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m9 5 7 7-7 7"/></svg>
+    </button>
     <div class="nav-group">
       <div class="nav-title" data-i18n="nav_control">Управление</div>
       <a class="nav-link active" data-view="dashboard">
@@ -114,8 +119,14 @@
 
 
     <section class="view" id="view-bots">
-      <div class="view-head"><h1 data-i18n="bots_title">Боты</h1></div>
-      <div class="bot-grid bot-grid--full" id="bots-list"><div class="empty">Загрузка…</div></div>
+      <div class="view-head bot-view-head">
+        <h1 data-i18n="bots_title">Боты</h1>
+        <div class="bot-search-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
+          <input id="bots-search" type="search" data-i18n-placeholder="bots_search" placeholder="Поиск бота" autocomplete="off">
+        </div>
+      </div>
+      <div class="bot-grid bot-grid--full bot-profile-grid" id="bots-list"><div class="empty">Загрузка…</div></div>
     </section>
 
 
@@ -208,19 +219,10 @@
           </div>
         </div>
 
-        <div class="settings-row settings-row--select">
-          <label class="field-label" for="settings-theme-select" data-i18n="theme_choose">Выбрать тему из списка:</label>
-          <div class="theme-select-actions">
-            <select id="settings-theme-select" class="theme-select">
-              <option value="dark">Тёмная тема (Стандартная)</option>
-              <option value="light">Светлая тема (Стандартная)</option>
-              <option value="dark-img">Тёмная тема (Dead Dream)</option>
-              <option value="light-img">Светлая тема (Dead Dream)</option>
-              <option value="custom" data-i18n="custom_theme">Своя тема</option>
-            </select>
-            <button class="mini-square-btn custom-theme-add" id="custom-theme-add" type="button" data-i18n-title="custom_theme_add" title="Создать свою тему"><span aria-hidden="true">+</span></button>
-          </div>
-        </div>
+        <button class="btn ghost custom-theme-wide" id="custom-theme-add" type="button">
+          <span class="custom-theme-wide-plus" aria-hidden="true">+</span>
+          <span data-i18n="custom_theme">Кастомная тема</span>
+        </button>
       </div>
 
       <div class="cmd-box settings-container settings-system">
@@ -291,6 +293,26 @@
         </div>
 
         <div class="settings-field-block">
+          <label class="field-label" for="set-hour-farm-priority-mode" data-i18n="hour_priority_mode">Режим приоритетного фарма часов</label>
+          <select id="set-hour-farm-priority-mode" class="theme-select settings-select">
+            <option value="hours_asc" data-i18n="hours_asc">По возрастанию часов</option>
+            <option value="hours_desc" data-i18n="hours_desc">По убыванию часов</option>
+            <option value="popular" data-i18n="hours_popular">Популярные — списки из топа по онлайну</option>
+          </select>
+          <p class="settings-field-hint" data-i18n="hour_priority_mode_hint">В режиме «Популярные» BetterASF берёт актуальный топ Steam по онлайну и выдаёт следующим аккаунтам разные списки игр.</p>
+        </div>
+        <div class="settings-field-block service-data-block">
+          <label class="field-label" data-i18n="service_data">Данные и диагностика</label>
+          <div class="service-cache-summary" id="service-cache-summary">—</div>
+          <div class="service-data-actions">
+            <button class="btn sm ghost" id="diagnostics-open" type="button" data-i18n="diagnostics">Диагностика</button>
+            <button class="btn sm ghost" id="cache-clear-covers" type="button" data-i18n="clear_covers">Очистить обложки</button>
+            <button class="btn sm ghost" id="cache-clear-names" type="button" data-i18n="clear_names">Очистить названия</button>
+            <button class="btn sm ghost" id="cache-clear-events" type="button" data-i18n="clear_history">Очистить историю</button>
+          </div>
+        </div>
+
+        <div class="settings-field-block">
           <label class="field-label" for="set-language" data-i18n="language_label">Язык интерфейса</label>
           <select id="set-language" class="theme-select settings-select">
             <option value="ru">Русский</option>
@@ -304,18 +326,9 @@
           <button class="mini-square-btn" id="asf-update-action" title="Проверить обновление ASF" type="button">⇩</button>
         </div>
 
-        <div class="settings-field-block experimental-setting">
-          <div class="experimental-heading">
-            <label class="field-label" for="set-hour-farm-priority-mode" data-i18n="hour_priority_mode">Режим приоритетного фарма часов</label>
-            <span class="experimental-badge" data-i18n="experimental">Экспериментальная функция</span>
-          </div>
-          <select id="set-hour-farm-priority-mode" class="theme-select settings-select">
-            <option value="hours_asc" data-i18n="hours_asc">По возрастанию часов</option>
-            <option value="hours_desc" data-i18n="hours_desc">По убыванию часов</option>
-            <option value="popular" data-i18n="hours_popular">Популярные — списки из топа по онлайну</option>
-          </select>
-          <p class="settings-field-hint" data-i18n="hour_priority_mode_hint">В режиме «Популярные» BetterASF берёт актуальный топ Steam по онлайну и выдаёт следующим аккаунтам разные списки игр.</p>
-        </div>
+
+
+
       </div>
     </section>
 
@@ -336,6 +349,31 @@
 </div>
 <div id="context-menu" class="context-menu" aria-hidden="true"></div>
 
+<div class="modal-overlay" id="diagnostics-modal" aria-hidden="true">
+  <div class="modal modal--wide diagnostics-modal">
+    <div class="diagnostics-head"><h2 data-i18n="diagnostics">Диагностика</h2><button class="tb-btn" id="diagnostics-close" type="button" title="Закрыть" aria-label="Закрыть"><svg class="window-control-icon" viewBox="0 0 24 24" fill="none"><path d="m7.5 7.5 9 9m0-9-9 9"/></svg></button></div>
+    <pre class="cmd-output diagnostics-output" id="diagnostics-output">—</pre>
+    <div class="modal-actions"><button class="btn ghost" id="updates-status" type="button" data-i18n="updates_status">Статус обновлений</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="bot-details-modal" aria-hidden="true">
+  <div class="modal bot-details-modal">
+    <aside class="bot-details-sidebar">
+      <div class="bot-details-profile" id="bot-details-profile"></div>
+      <div class="bot-details-actions" id="bot-details-actions"></div>
+      <div class="bot-details-timing" id="bot-details-timing"></div>
+    </aside>
+    <section class="bot-details-content">
+      <div class="bot-details-head">
+        <h2 id="bot-details-title">Запущенные игры</h2>
+        <button class="tb-btn" id="bot-details-close" type="button" title="Закрыть" aria-label="Закрыть"><svg class="window-control-icon" viewBox="0 0 24 24" fill="none"><path d="m7.5 7.5 9 9m0-9-9 9"/></svg></button>
+      </div>
+      <div class="bot-details-games" id="bot-details-games"></div>
+    </section>
+  </div>
+</div>
+
 <div class="modal-overlay" id="custom-theme-modal" aria-hidden="true">
   <div class="modal modal--wide custom-theme-modal">
     <h2 data-i18n="custom_theme_title">Своя тема</h2>
@@ -348,9 +386,9 @@
     </div>
 
     <label class="field-label" for="custom-theme-file" data-i18n="custom_theme_image">Своя картинка</label>
-    <input id="custom-theme-file" class="custom-theme-file" type="file" accept="image/png,image/jpeg,image/webp">
+    <input id="custom-theme-file" class="custom-theme-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm">
     <div class="custom-theme-preview" id="custom-theme-preview" aria-hidden="true"></div>
-    <p class="settings-field-hint" id="custom-theme-file-note" data-i18n="custom_theme_image_hint">PNG, JPG или WebP, до 12 МБ. Если файл не выбрать, сохранится текущая картинка.</p>
+    <p class="settings-field-hint" id="custom-theme-file-note" data-i18n="custom_theme_image_hint">PNG, JPG, WebP, GIF, MP4 или WebM. Изображение до 12 МБ, видео до 50 МБ.</p>
 
     <label class="checkbox-row custom-theme-transparency" for="custom-theme-transparent">
       <input id="custom-theme-transparent" type="checkbox">

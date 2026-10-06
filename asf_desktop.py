@@ -10,11 +10,13 @@ import http.server
 import socketserver
 import urllib.request
 import urllib.error
+import urllib.parse
 import hashlib
 import shutil
 import tempfile
 import zipfile
 import base64
+import re
 from pathlib import Path
 
 try:
@@ -27,11 +29,11 @@ APP_NAME = "BetterASF"
 APP_VERSION = "3.0"
 GITHUB_REPO = "CatYaderka/BetterASF"
 
-# Curated GitHub sources for the plugin store. The release asset, version and
-# availability are read live from GitHub; this list only restricts installation
-# to known ASF plugin projects instead of accepting arbitrary executable URLs.
-# ASF ships several official plugins in its standard bundle. Their real public
-# IPlugin.Name is stable even when the package directory is an assembly filename.
+
+
+
+
+
 OFFICIAL_PLUGIN_DISPLAY_NAMES = {
     "archisteamfarmofficialpluginsitemsmatcher": "ItemsMatcher",
     "archisteamfarmofficialpluginsmobileauthenticator": "MobileAuthenticator",
@@ -41,16 +43,15 @@ OFFICIAL_PLUGIN_DISPLAY_NAMES = {
 
 DEFAULT_PLUGIN_STORE_SOURCES = (
     {"id": "official-monitoring", "name": "Monitoring", "repository": "JustArchiNET/ArchiSteamFarm", "asset_prefix": "ArchiSteamFarm.OfficialPlugins.Monitoring", "description": "Official ASF plugin that exports monitoring metrics."},
-    {"id": "freepackages", "name": "FreePackages", "repository": "Citrinate/FreePackages", "description": "Finds and redeems free Steam packages."},
-    {"id": "boostermanager", "name": "BoosterManager", "repository": "Citrinate/BoosterManager", "description": "Creates Steam booster packs and manages card items."},
-    {"id": "cs2interface", "name": "CS2Interface", "repository": "Citrinate/CS2Interface", "description": "Adds Counter-Strike 2 integrations to ASF."},
-    {"id": "commandlessredeem", "name": "CommandlessRedeem", "repository": "CatPoweredPlugins/CommandlessRedeem", "description": "Adds commandless Steam key redemption."},
+    {"id": "commandlessredeem", "name": "CommandlessRedeem", "repository": "CatPoweredPlugins/CommandlessRedeem", "description": "Redeems keys received through Steam chat without the standard redeem command."},
+    {"id": "asf-achievement-manager", "name": "ASFAchievementManager", "repository": "CatPoweredPlugins/ASFAchievementManager", "description": "Manages Steam achievements through ASF commands."},
+    {"id": "asf-enhance", "name": "ASFEnhance", "repository": "chr233/ASFEnhance", "description": "Extends ASF with additional commands and features."},
 )
-# The catalogue is read from this repository on each plugin-store visit using
-# HTTP ETags. The packaged JSON is only a safe offline fallback.
+
+
 PLUGIN_CATALOG_FILENAME = "plugin_catalog.json"
 PLUGIN_CATALOG_URL = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/{PLUGIN_CATALOG_FILENAME}"
-PLUGIN_CATALOG_CACHE_FILE = None  # Assigned after DATA_DIR is initialized.
+PLUGIN_CATALOG_CACHE_FILE = None
 PLUGIN_STORE_SOURCES = tuple(DEFAULT_PLUGIN_STORE_SOURCES)
 _PLUGIN_CATALOG_STATE = {"loaded": False, "etag": "", "sources": tuple(DEFAULT_PLUGIN_STORE_SOURCES)}
 _PLUGIN_CATALOG_LOCK = threading.RLock()
@@ -58,9 +59,12 @@ _PLUGIN_STORE_CACHE = {"at": 0.0, "items": [], "error": ""}
 _PLUGIN_STORE_LOCK = threading.RLock()
 _POPULAR_GAMES_CACHE = {"at": 0.0, "games": [], "error": ""}
 _POPULAR_GAMES_LOCK = threading.RLock()
+_GAME_META_CACHE = {}
+_GAME_META_LOCK = threading.RLock()
 
 _LOG_PATH = None
-RUNTIME = {"steam_api_key": "", "asf_status": "starting", "asf_status_message": ""}
+_EVENT_LOG_SERVICE = None
+RUNTIME = {"steam_api_key": "", "ipc_password": "", "asf_status": "starting", "asf_status_message": ""}
 
 
 def _set_log_path(p):
@@ -83,6 +87,11 @@ def log(msg):
         try:
             with open(_LOG_PATH, "a", encoding="utf-8") as f:
                 f.write(line + "\n")
+        except Exception:
+            pass
+    if _EVENT_LOG_SERVICE:
+        try:
+            _EVENT_LOG_SERVICE.record(str(msg), source="python")
         except Exception:
             pass
 
@@ -126,6 +135,9 @@ def data_dir():
 
 DATA_DIR = data_dir()
 PLUGIN_CATALOG_CACHE_FILE = DATA_DIR / "plugin-catalog-cache.json"
+STEAM_APP_CATALOG_FILE = DATA_DIR / "steam-app-index.json"
+STEAM_COVERS_DIR = DATA_DIR / "steam-covers"
+EVENT_LOG_FILE = DATA_DIR / "events.jsonl"
 
 
 def ui_dir():
@@ -137,6 +149,8 @@ def ui_dir():
 
 UI_DIR = ui_dir()
 SETTINGS_FILE = DATA_DIR / "settings.json"
+HOUR_FARM_STATE_FILE = DATA_DIR / "hour-farm-state.json"
+LOGIN_REQUEST_STATE_FILE = DATA_DIR / "login-requests-state.json"
 
 DEFAULTS = {
     "asf_path": "",
@@ -225,19 +239,25 @@ def save_theme(theme):
     _save_settings({"theme": theme})
 
 
-_CUSTOM_THEME_IMAGE_PREFIX = "custom-theme-image"
-_CUSTOM_THEME_IMAGE_TYPES = {
-    ".png": "image/png",
-    ".jpg": "image/jpeg",
-    ".webp": "image/webp",
+_CUSTOM_THEME_MEDIA_PREFIX = "custom-theme-media"
+_CUSTOM_THEME_MEDIA_TYPES = {
+    ".png": ("image/png", "image"),
+    ".jpg": ("image/jpeg", "image"),
+    ".webp": ("image/webp", "image"),
+    ".gif": ("image/gif", "image"),
+    ".mp4": ("video/mp4", "video"),
+    ".webm": ("video/webm", "video"),
 }
-_CUSTOM_THEME_MAX_BYTES = 12 * 1024 * 1024
+_CUSTOM_THEME_MAX_IMAGE_BYTES = 12 * 1024 * 1024
+_CUSTOM_THEME_MAX_VIDEO_BYTES = 50 * 1024 * 1024
 
 
-def _custom_theme_image_path(settings=None):
+def _custom_theme_media_path(settings=None):
     settings = settings if isinstance(settings, dict) else _load_settings()
-    filename = str(settings.get("custom_theme_image") or "")
-    if filename not in {f"{_CUSTOM_THEME_IMAGE_PREFIX}{ext}" for ext in _CUSTOM_THEME_IMAGE_TYPES}:
+    filename = str(settings.get("custom_theme_media") or settings.get("custom_theme_image") or "")
+    allowed = {f"{_CUSTOM_THEME_MEDIA_PREFIX}{ext}" for ext in _CUSTOM_THEME_MEDIA_TYPES}
+    allowed.update({f"custom-theme-image{ext}" for ext in _CUSTOM_THEME_MEDIA_TYPES})
+    if filename not in allowed:
         return None
     path = DATA_DIR / filename
     return path if path.is_file() else None
@@ -248,23 +268,31 @@ def custom_theme_state():
     base = str(settings.get("custom_theme_base") or "dark").lower()
     if base not in ("dark", "light"):
         base = "dark"
-    image = _custom_theme_image_path(settings)
+    media = _custom_theme_media_path(settings)
+    kind = _CUSTOM_THEME_MEDIA_TYPES.get(media.suffix.lower(), ("", ""))[1] if media else ""
     return {
         "ok": True,
         "base": base,
         "transparent": bool(settings.get("custom_theme_transparent", False)),
-        "hasImage": bool(image),
-        "imageUrl": f"/__custom_theme/image?v={image.stat().st_mtime_ns}" if image else "",
+        "hasMedia": bool(media),
+        "mediaType": kind,
+        "mediaUrl": f"/__custom_theme/media?v={media.stat().st_mtime_ns}" if media else "",
     }
 
 
-def _custom_theme_image_type(data):
+def _custom_theme_media_extension(data):
     if data.startswith(b"\x89PNG\r\n\x1a\n"):
         return ".png"
     if data.startswith(b"\xff\xd8\xff"):
         return ".jpg"
+    if data.startswith(b"GIF87a") or data.startswith(b"GIF89a"):
+        return ".gif"
     if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
         return ".webp"
+    if len(data) >= 12 and data[4:8] == b"ftyp":
+        return ".mp4"
+    if data.startswith(b"\x1a\x45\xdf\xa3"):
+        return ".webm"
     return None
 
 
@@ -280,37 +308,42 @@ def save_custom_theme(payload):
     }
     try:
         if payload.get("removeImage"):
-            for ext in _CUSTOM_THEME_IMAGE_TYPES:
-                try:
-                    (DATA_DIR / f"{_CUSTOM_THEME_IMAGE_PREFIX}{ext}").unlink(missing_ok=True)
-                except Exception:
-                    pass
+            for ext in _CUSTOM_THEME_MEDIA_TYPES:
+                for prefix in ("custom-theme-image", _CUSTOM_THEME_MEDIA_PREFIX):
+                    try:
+                        (DATA_DIR / f"{prefix}{ext}").unlink(missing_ok=True)
+                    except Exception:
+                        pass
+            patch["custom_theme_media"] = ""
             patch["custom_theme_image"] = ""
 
-        image_data = payload.get("imageData")
-        if image_data:
-            if not isinstance(image_data, str) or not image_data.startswith("data:image/") or "," not in image_data:
-                return {"ok": False, "message": "Invalid image format."}
-            encoded = image_data.split(",", 1)[1]
+        media_data = payload.get("imageData")
+        if media_data:
+            if not isinstance(media_data, str) or not media_data.startswith("data:") or "," not in media_data:
+                return {"ok": False, "message": "Invalid media format."}
+            encoded = media_data.split(",", 1)[1]
             try:
                 raw = base64.b64decode(encoded, validate=True)
             except Exception:
-                return {"ok": False, "message": "Image data cannot be decoded."}
-            if not raw or len(raw) > _CUSTOM_THEME_MAX_BYTES:
-                return {"ok": False, "message": "Image exceeds the 12 MB limit."}
-            ext = _custom_theme_image_type(raw)
+                return {"ok": False, "message": "Media data cannot be decoded."}
+            ext = _custom_theme_media_extension(raw)
             if not ext:
-                return {"ok": False, "message": "Use a PNG, JPEG or WebP image."}
-            for old_ext in _CUSTOM_THEME_IMAGE_TYPES:
-                try:
-                    (DATA_DIR / f"{_CUSTOM_THEME_IMAGE_PREFIX}{old_ext}").unlink(missing_ok=True)
-                except Exception:
-                    pass
-            target = DATA_DIR / f"{_CUSTOM_THEME_IMAGE_PREFIX}{ext}"
+                return {"ok": False, "message": "Use PNG, JPEG, WebP, GIF, MP4 or WebM."}
+            limit = _CUSTOM_THEME_MAX_VIDEO_BYTES if _CUSTOM_THEME_MEDIA_TYPES[ext][1] == "video" else _CUSTOM_THEME_MAX_IMAGE_BYTES
+            if not raw or len(raw) > limit:
+                return {"ok": False, "message": "Media file exceeds the size limit."}
+            for old_ext in _CUSTOM_THEME_MEDIA_TYPES:
+                for prefix in ("custom-theme-image", _CUSTOM_THEME_MEDIA_PREFIX):
+                    try:
+                        (DATA_DIR / f"{prefix}{old_ext}").unlink(missing_ok=True)
+                    except Exception:
+                        pass
+            target = DATA_DIR / f"{_CUSTOM_THEME_MEDIA_PREFIX}{ext}"
             temporary = target.with_suffix(target.suffix + ".part")
             temporary.write_bytes(raw)
             temporary.replace(target)
-            patch["custom_theme_image"] = target.name
+            patch["custom_theme_media"] = target.name
+            patch["custom_theme_image"] = ""
 
         _save_settings(patch)
         return custom_theme_state()
@@ -341,7 +374,7 @@ def set_autostart_enabled(enabled):
     enabled = bool(enabled)
     set_app_setting("autostart", enabled)
     if os.name != "nt":
-        # The setting is saved everywhere, but real autostart is configured only on Windows builds.
+
         return True
     try:
         import winreg
@@ -373,7 +406,7 @@ def _ps_quote(value):
 
 
 def ensure_user_shortcuts(cfg):
-    """Create per-user Desktop and Start Menu shortcuts for the current executable."""
+
     enabled = str(cfg.get("create_shortcuts", "true")).lower() in ("1", "true", "yes", "on")
     if not enabled or os.name != "nt" or not is_frozen():
         return
@@ -426,7 +459,7 @@ foreach ($lnk in $links) {{
 
 
 def ensure_program_files_install(cfg):
-    """For one-file Windows builds: copy BetterASF.exe to Program Files and relaunch it."""
+
     enabled = str(cfg.get("self_install_to_program_files", "true")).lower() in ("1", "true", "yes", "on")
     if not enabled or os.name != "nt" or not is_frozen():
         return False
@@ -814,9 +847,9 @@ class ASFProcess:
         self.replaced_by_self_update = False
 
     def start(self):
-        # Important: do not pass --NO-RESTART. During self-update ASF terminates
-        # the current process and starts a new one; with --NO-RESTART BetterASF would see
-        # only a dead PID and keep showing no connection.
+
+
+
         cmd = [self.exe, "--SERVICE"] + list(self.extra_args)
         flags = 0
         if os.name == "nt":
@@ -841,8 +874,8 @@ class ASFProcess:
             self.replaced_by_self_update = False
             log(f"  ASF PID: {self.proc.pid}; startup output: {launch_log}")
 
-            # A kill-on-close Job Object can prevent a new ASF executable from
-            # breaking away during ASF self-update. It is opt-in for this reason.
+
+
             if os.name == "nt" and self.use_job_object:
                 self.job = _create_kill_job()
                 if self.job and _assign_to_job(self.job, self.proc.pid):
@@ -859,7 +892,7 @@ class ASFProcess:
         self.replaced_by_self_update = True
 
     def _stop_self_update_successor(self):
-        """Stop the replacement process when ASF restarted itself outside Popen's PID."""
+
         if os.name != "nt":
             return
         try:
@@ -939,7 +972,6 @@ class ASFProcess:
 
 
 def _process_memory_bytes(pid):
-    """Возвращает рабочий набор процесса в байтах без внешних зависимостей."""
     try:
         pid = int(pid)
     except Exception:
@@ -948,9 +980,6 @@ def _process_memory_bytes(pid):
         try:
             import ctypes
             from ctypes import wintypes
-
-            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-            PROCESS_VM_READ = 0x0010
 
             class PROCESS_MEMORY_COUNTERS(ctypes.Structure):
                 _fields_ = [
@@ -968,10 +997,7 @@ def _process_memory_bytes(pid):
 
             kernel32 = ctypes.windll.kernel32
             psapi = ctypes.windll.psapi
-            kernel32.OpenProcess.restype = wintypes.HANDLE
-            kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
-            psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
-            handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ, False, pid)
+            handle = kernel32.OpenProcess(0x1000 | 0x0010, False, pid)
             if not handle:
                 return 0
             try:
@@ -983,202 +1009,190 @@ def _process_memory_bytes(pid):
                 kernel32.CloseHandle(handle)
         except Exception:
             return 0
-    else:
-        try:
-            with open(f"/proc/{pid}/statm", "r", encoding="utf-8") as f:
-                parts = f.read().split()
-            if len(parts) >= 2:
-                return int(parts[1]) * os.sysconf("SC_PAGE_SIZE")
-        except Exception:
-            pass
+    try:
+        parts = Path(f"/proc/{pid}/statm").read_text(encoding="utf-8").split()
+        if len(parts) >= 2:
+            return int(parts[1]) * os.sysconf("SC_PAGE_SIZE")
+    except Exception:
+        pass
     return 0
 
 
 def _child_process_map():
-    """Карта parent_pid -> [child_pid] для подсчёта памяти WebView/дочерних процессов."""
-    mp = {}
+    result = {}
     if os.name == "nt":
         try:
             import ctypes
             from ctypes import wintypes
-            TH32CS_SNAPPROCESS = 0x00000002
-            INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
 
             class PROCESSENTRY32W(ctypes.Structure):
                 _fields_ = [
-                    ("dwSize", wintypes.DWORD), ("cntUsage", wintypes.DWORD),
-                    ("th32ProcessID", wintypes.DWORD), ("th32DefaultHeapID", ctypes.c_void_p),
-                    ("th32ModuleID", wintypes.DWORD), ("cntThreads", wintypes.DWORD),
-                    ("th32ParentProcessID", wintypes.DWORD), ("pcPriClassBase", ctypes.c_long),
-                    ("dwFlags", wintypes.DWORD), ("szExeFile", wintypes.WCHAR * 260),
+                    ("dwSize", wintypes.DWORD),
+                    ("cntUsage", wintypes.DWORD),
+                    ("th32ProcessID", wintypes.DWORD),
+                    ("th32DefaultHeapID", ctypes.c_size_t),
+                    ("th32ModuleID", wintypes.DWORD),
+                    ("cntThreads", wintypes.DWORD),
+                    ("th32ParentProcessID", wintypes.DWORD),
+                    ("pcPriClassBase", ctypes.c_long),
+                    ("dwFlags", wintypes.DWORD),
+                    ("szExeFile", wintypes.WCHAR * 260),
                 ]
 
-            k32 = ctypes.windll.kernel32
-            k32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
-            k32.CloseHandle.argtypes = [wintypes.HANDLE]
-            snap = k32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
-            if snap == INVALID_HANDLE_VALUE:
-                return mp
+            kernel32 = ctypes.windll.kernel32
+            snapshot = kernel32.CreateToolhelp32Snapshot(0x00000002, 0)
+            invalid = ctypes.c_void_p(-1).value
+            if snapshot == invalid:
+                return result
             try:
-                pe = PROCESSENTRY32W()
-                pe.dwSize = ctypes.sizeof(pe)
-                ok = k32.Process32FirstW(snap, ctypes.byref(pe))
-                while ok:
-                    mp.setdefault(int(pe.th32ParentProcessID), []).append(int(pe.th32ProcessID))
-                    ok = k32.Process32NextW(snap, ctypes.byref(pe))
+                entry = PROCESSENTRY32W()
+                entry.dwSize = ctypes.sizeof(entry)
+                current = kernel32.Process32FirstW(snapshot, ctypes.byref(entry))
+                while current:
+                    result.setdefault(int(entry.th32ParentProcessID), []).append(int(entry.th32ProcessID))
+                    current = kernel32.Process32NextW(snapshot, ctypes.byref(entry))
             finally:
-                k32.CloseHandle(snap)
-        except Exception:
-            return mp
-    else:
-        try:
-            proc = Path("/proc")
-            for d in proc.iterdir():
-                if not d.name.isdigit():
-                    continue
-                try:
-                    text = (d / "stat").read_text(encoding="utf-8", errors="ignore")
-                    # pid (comm) state ppid ...; comm can contain spaces, so use the last closing parenthesis.
-                    rest = text[text.rfind(")") + 2:].split()
-                    ppid = int(rest[1])
-                    mp.setdefault(ppid, []).append(int(d.name))
-                except Exception:
-                    pass
+                kernel32.CloseHandle(snapshot)
         except Exception:
             pass
-    return mp
+        return result
+    try:
+        for path in Path("/proc").iterdir():
+            if not path.name.isdigit():
+                continue
+            try:
+                stat = (path / "stat").read_text(encoding="utf-8", errors="ignore")
+                rest = stat[stat.rfind(")") + 2:].split()
+                parent = int(rest[1])
+                result.setdefault(parent, []).append(int(path.name))
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return result
 
 
 def _process_name_map():
-    """Карта pid -> exe name. Нужна, потому что WebView2 иногда не висит дочерним процессом Python."""
-    names = {}
+    result = {}
     if os.name == "nt":
         try:
             import ctypes
             from ctypes import wintypes
-            TH32CS_SNAPPROCESS = 0x00000002
-            INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
 
             class PROCESSENTRY32W(ctypes.Structure):
                 _fields_ = [
-                    ("dwSize", wintypes.DWORD), ("cntUsage", wintypes.DWORD),
-                    ("th32ProcessID", wintypes.DWORD), ("th32DefaultHeapID", ctypes.c_void_p),
-                    ("th32ModuleID", wintypes.DWORD), ("cntThreads", wintypes.DWORD),
-                    ("th32ParentProcessID", wintypes.DWORD), ("pcPriClassBase", ctypes.c_long),
-                    ("dwFlags", wintypes.DWORD), ("szExeFile", wintypes.WCHAR * 260),
+                    ("dwSize", wintypes.DWORD),
+                    ("cntUsage", wintypes.DWORD),
+                    ("th32ProcessID", wintypes.DWORD),
+                    ("th32DefaultHeapID", ctypes.c_size_t),
+                    ("th32ModuleID", wintypes.DWORD),
+                    ("cntThreads", wintypes.DWORD),
+                    ("th32ParentProcessID", wintypes.DWORD),
+                    ("pcPriClassBase", ctypes.c_long),
+                    ("dwFlags", wintypes.DWORD),
+                    ("szExeFile", wintypes.WCHAR * 260),
                 ]
 
-            k32 = ctypes.windll.kernel32
-            k32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
-            k32.CloseHandle.argtypes = [wintypes.HANDLE]
-            snap = k32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
-            if snap == INVALID_HANDLE_VALUE:
-                return names
+            kernel32 = ctypes.windll.kernel32
+            snapshot = kernel32.CreateToolhelp32Snapshot(0x00000002, 0)
+            invalid = ctypes.c_void_p(-1).value
+            if snapshot == invalid:
+                return result
             try:
-                pe = PROCESSENTRY32W()
-                pe.dwSize = ctypes.sizeof(pe)
-                ok = k32.Process32FirstW(snap, ctypes.byref(pe))
-                while ok:
-                    names[int(pe.th32ProcessID)] = str(pe.szExeFile or "").lower()
-                    ok = k32.Process32NextW(snap, ctypes.byref(pe))
+                entry = PROCESSENTRY32W()
+                entry.dwSize = ctypes.sizeof(entry)
+                current = kernel32.Process32FirstW(snapshot, ctypes.byref(entry))
+                while current:
+                    result[int(entry.th32ProcessID)] = str(entry.szExeFile).lower()
+                    current = kernel32.Process32NextW(snapshot, ctypes.byref(entry))
             finally:
-                k32.CloseHandle(snap)
-        except Exception:
-            return names
-    else:
-        try:
-            for d in Path("/proc").iterdir():
-                if not d.name.isdigit():
-                    continue
-                try:
-                    names[int(d.name)] = (d / "comm").read_text(encoding="utf-8", errors="ignore").strip().lower()
-                except Exception:
-                    pass
+                kernel32.CloseHandle(snapshot)
         except Exception:
             pass
-    return names
+        return result
+    try:
+        for path in Path("/proc").iterdir():
+            if path.name.isdigit():
+                try:
+                    result[int(path.name)] = (path / "comm").read_text(encoding="utf-8", errors="ignore").strip().lower()
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    return result
 
 
-def _webview2_pids_for_stats(mp, name_map, descendants, include_orphans=True):
-    desc = set(descendants or [])
-    by_name = {pid for pid, nm in (name_map or {}).items() if nm == "msedgewebview2.exe" or nm == "msedgewebview2"}
-    child_webviews = by_name & desc
-    if child_webviews:
-        return child_webviews, False
-    # On some WebView2/COM runtimes msedgewebview2.exe processes are not Python children,
-    # while Task Manager still shows them as WebView2. For a realistic BetterASF value,
-    # include orphan WebView2 processes; disable this if other WebView2 apps are running.
-    return (by_name if include_orphans else set()), True if by_name and include_orphans else False
+def _descendants(root_pid, process_map):
+    result = []
+    pending = [int(root_pid)]
+    seen = set(pending)
+    while pending:
+        parent = pending.pop()
+        for child in process_map.get(parent, []):
+            if child not in seen:
+                seen.add(child)
+                result.append(child)
+                pending.append(child)
+    return result
 
 
-def _descendants(root_pid, mp):
-    out = []
-    stack = list(mp.get(int(root_pid), []))
-    seen = set()
-    while stack:
-        pid = stack.pop()
-        if pid in seen:
-            continue
-        seen.add(pid)
-        out.append(pid)
-        stack.extend(mp.get(pid, []))
-    return out
+def _webview2_pids_for_stats(process_map, name_map, descendants, include_orphans=True):
+    descendants = set(descendants)
+    webview_names = {"msedgewebview2.exe", "msedgewebview2"}
+    found = {pid for pid in descendants if name_map.get(pid, "") in webview_names}
+    orphan_mode = False
+    if include_orphans:
+        orphan = {pid for pid, name in name_map.items() if name in webview_names}
+        if orphan - found:
+            orphan_mode = True
+        found.update(orphan)
+    return found, orphan_mode
 
 
 def app_memory_stats(asf_pid=None, exclude_pids=None, include_orphan_webview2=True):
-    self_pid = os.getpid()
-    mp = _child_process_map()
+    process_map = _child_process_map()
     name_map = _process_name_map()
-    descendants = _descendants(self_pid, mp)
-    app_pids = [self_pid] + descendants
-
-    webview_pids, webview_orphan_mode = _webview2_pids_for_stats(mp, name_map, descendants, include_orphan_webview2)
-    app_pids = list(dict.fromkeys(app_pids + list(webview_pids)))
-
-    exclude = set()
-    if asf_pid:
+    self_pid = os.getpid()
+    app_pids = [self_pid] + _descendants(self_pid, process_map)
+    webview_pids, orphan_mode = _webview2_pids_for_stats(
+        process_map, name_map, _descendants(self_pid, process_map), include_orphan_webview2,
+    )
+    excluded = set()
+    for value in list(exclude_pids or []) + ([asf_pid] if asf_pid else []):
         try:
-            exclude.add(int(asf_pid))
-            exclude.update(_descendants(int(asf_pid), mp))
+            pid = int(value)
+            excluded.add(pid)
+            excluded.update(_descendants(pid, process_map))
         except Exception:
             pass
-    for ep in (exclude_pids or []):
-        if ep:
-            try:
-                exclude.add(int(ep))
-                exclude.update(_descendants(int(ep), mp))
-            except Exception:
-                pass
-    app_pids = [p for p in app_pids if p not in exclude]
-    webview_pids = [p for p in webview_pids if p not in exclude]
-
-    app_bytes = sum(_process_memory_bytes(p) for p in app_pids)
-    webview_bytes = sum(_process_memory_bytes(p) for p in webview_pids)
-    self_bytes = _process_memory_bytes(self_pid)
+    app_pids = [pid for pid in app_pids if pid not in excluded]
+    webview_pids = [pid for pid in webview_pids if pid not in excluded]
+    app_bytes = sum(_process_memory_bytes(pid) for pid in app_pids)
+    webview_bytes = sum(_process_memory_bytes(pid) for pid in webview_pids)
     return {
         "pid": self_pid,
         "pids": app_pids,
         "memoryBytes": app_bytes,
         "memoryKb": int(app_bytes / 1024),
-        "selfMemoryKb": int(self_bytes / 1024),
+        "selfMemoryKb": int(_process_memory_bytes(self_pid) / 1024),
         "webviewPids": list(webview_pids),
         "webviewMemoryKb": int(webview_bytes / 1024),
-        "webviewOrphanMode": bool(webview_orphan_mode),
+        "webviewOrphanMode": bool(orphan_mode),
         "asfPid": int(asf_pid) if asf_pid else None,
     }
 
 
 def ipc_ready(host, port):
     hosts = [host]
-    for h in ("127.0.0.1", "::1"):
-        if h not in hosts:
-            hosts.append(h)
-    for h in hosts:
+    for candidate in ("127.0.0.1", "::1"):
+        if candidate not in hosts:
+            hosts.append(candidate)
+    for candidate in hosts:
         try:
-            with socket.create_connection((h, port), timeout=2):
+            with socket.create_connection((candidate, port), timeout=2):
                 return True
         except OSError:
-            continue
+            pass
     return False
 
 
@@ -1201,22 +1215,6 @@ def _version_tuple(v):
     return tuple(parts[:4])
 
 
-def _local_git_commit():
-    try:
-        head = APP_DIR / ".git" / "HEAD"
-        if head.exists():
-            txt = head.read_text(encoding="utf-8", errors="ignore").strip()
-            if txt.startswith("ref:"):
-                ref = txt.split(" ", 1)[1].strip()
-                rp = APP_DIR / ".git" / ref
-                if rp.exists():
-                    return rp.read_text(encoding="utf-8", errors="ignore").strip()[:12]
-            return txt[:12]
-    except Exception:
-        pass
-    return ""
-
-
 def _best_release_asset(release):
     assets = release.get("assets") or []
     if not assets:
@@ -1234,7 +1232,6 @@ def _best_release_asset(release):
 
 
 def check_github_update():
-    """Проверяет релизы BetterASF на GitHub и отдаёт прямую ссылку на скачивание последней версии."""
     result = {
         "ok": False,
         "update": False,
@@ -1244,72 +1241,59 @@ def check_github_update():
     }
     headers = {"User-Agent": f"{APP_NAME}/{APP_VERSION}", "Accept": "application/vnd.github+json"}
     current_tuple = _version_tuple(APP_VERSION)
-
-    # 1) Main path: GitHub Releases. Pick the newest release by semver tag_name.
     try:
-        req = urllib.request.Request(f"https://api.github.com/repos/{GITHUB_REPO}/releases?per_page=30", headers=headers)
-        with urllib.request.urlopen(req, timeout=8) as r:
-            releases = json.loads(r.read().decode("utf-8", "ignore"))
+        request = urllib.request.Request(f"https://api.github.com/repos/{GITHUB_REPO}/releases?per_page=30", headers=headers)
+        with urllib.request.urlopen(request, timeout=8) as response:
+            releases = json.loads(response.read().decode("utf-8", "ignore"))
         candidates = []
-        for rel in releases if isinstance(releases, list) else []:
-            if rel.get("draft"):
+        for release in releases if isinstance(releases, list) else []:
+            if release.get("draft"):
                 continue
-            tag = rel.get("tag_name") or rel.get("name") or ""
-            ver = _normalize_version(tag)
-            if not ver:
-                continue
-            vt = _version_tuple(ver)
-            candidates.append((vt, ver, rel))
+            version = _normalize_version(release.get("tag_name") or release.get("name") or "")
+            if version:
+                candidates.append((_version_tuple(version), version, release))
         if candidates:
-            candidates.sort(key=lambda x: x[0], reverse=True)
-            latest_tuple, latest_v, latest_rel = candidates[0]
-            has_update = latest_tuple > current_tuple
-            download_url = _best_release_asset(latest_rel)
-            result.update({
+            candidates.sort(key=lambda item: item[0], reverse=True)
+            latest_tuple, latest_version, latest_release = candidates[0]
+            update = latest_tuple > current_tuple
+            return {
                 "ok": True,
                 "source": "release",
-                "update": bool(has_update),
+                "update": update,
                 "currentVersion": APP_VERSION,
-                "latestVersion": latest_v,
-                "url": latest_rel.get("html_url") or f"https://github.com/{GITHUB_REPO}/releases/latest",
-                "downloadUrl": download_url,
-                "message": (f"Доступна новая версия BetterASF v{latest_v}" if has_update else f"BetterASF v{APP_VERSION} — актуальная версия."),
-            })
-            return result
-    except Exception as e:
-        log(f"GitHub update releases error: {e}")
-
-    # 2) Fallback: if no releases exist, check tags. This is not a release download, but shows a new tag.
+                "latestVersion": latest_version,
+                "url": latest_release.get("html_url") or f"https://github.com/{GITHUB_REPO}/releases/latest",
+                "downloadUrl": _best_release_asset(latest_release),
+                "message": f"Доступна новая версия BetterASF v{latest_version}" if update else f"BetterASF v{APP_VERSION} — актуальная версия.",
+            }
+    except Exception as exc:
+        log(f"GitHub update releases error: {exc}")
     try:
-        req = urllib.request.Request(f"https://api.github.com/repos/{GITHUB_REPO}/tags?per_page=30", headers=headers)
-        with urllib.request.urlopen(req, timeout=8) as r:
-            tags = json.loads(r.read().decode("utf-8", "ignore"))
+        request = urllib.request.Request(f"https://api.github.com/repos/{GITHUB_REPO}/tags?per_page=30", headers=headers)
+        with urllib.request.urlopen(request, timeout=8) as response:
+            tags = json.loads(response.read().decode("utf-8", "ignore"))
         candidates = []
         for tag in tags if isinstance(tags, list) else []:
-            name = tag.get("name") or ""
-            ver = _normalize_version(name)
-            if ver:
-                candidates.append((_version_tuple(ver), ver, tag))
+            version = _normalize_version(tag.get("name") or "")
+            if version:
+                candidates.append((_version_tuple(version), version, tag))
         if candidates:
-            candidates.sort(key=lambda x: x[0], reverse=True)
-            latest_tuple, latest_v, tag = candidates[0]
-            has_update = latest_tuple > current_tuple
-            zip_url = f"https://github.com/{GITHUB_REPO}/archive/refs/tags/{tag.get('name')}.zip"
-            result.update({
+            candidates.sort(key=lambda item: item[0], reverse=True)
+            latest_tuple, latest_version, tag = candidates[0]
+            update = latest_tuple > current_tuple
+            return {
                 "ok": True,
                 "source": "tag",
-                "update": bool(has_update),
+                "update": update,
                 "currentVersion": APP_VERSION,
-                "latestVersion": latest_v,
+                "latestVersion": latest_version,
                 "url": f"https://github.com/{GITHUB_REPO}/releases/latest",
-                "downloadUrl": zip_url,
-                "message": (f"Доступен новый тег BetterASF v{latest_v}" if has_update else f"BetterASF v{APP_VERSION} — актуальная версия."),
-            })
-            return result
-    except Exception as e:
-        log(f"GitHub update tags error: {e}")
-        result["error"] = str(e)
-
+                "downloadUrl": f"https://github.com/{GITHUB_REPO}/archive/refs/tags/{tag.get('name')}.zip",
+                "message": f"Доступен новый тег BetterASF v{latest_version}" if update else f"BetterASF v{APP_VERSION} — актуальная версия.",
+            }
+    except Exception as exc:
+        log(f"GitHub update tags error: {exc}")
+        result["error"] = str(exc)
     return result
 
 
@@ -1335,7 +1319,7 @@ def _download_file(url, target):
 
 
 def install_github_update(exit_callback=None):
-    """Start an elevated visible updater that downloads the latest exe, closes BetterASF/ASF and replaces the installed copy."""
+
     info = check_github_update()
     if not info.get("ok"):
         return {"ok": False, "message": info.get("message") or "Update check failed."}
@@ -1486,8 +1470,20 @@ try {{
 
 
 
+def _merge_plugin_catalog(base, incoming):
+    by_id = {item["id"]: item for item in base}
+    ordered = []
+    for item in incoming:
+        by_id[item["id"]] = item
+        ordered.append(item["id"])
+    for item in base:
+        if item["id"] not in ordered:
+            ordered.append(item["id"])
+    return tuple(by_id[item_id] for item_id in ordered)
+
+
 def _valid_plugin_catalog(payload):
-    """Validate the remotely maintained BetterASF plugin catalogue."""
+
     raw = payload.get("plugins") if isinstance(payload, dict) else payload
     if not isinstance(raw, list):
         return None
@@ -1496,6 +1492,8 @@ def _valid_plugin_catalog(payload):
     for entry in raw[:30]:
         if not isinstance(entry, dict):
             return None
+        if entry.get("betterasf_compatible") is not True:
+            continue
         plugin_id = str(entry.get("id") or "").strip()
         name = str(entry.get("name") or "").strip()
         repository = str(entry.get("repository") or "").strip()
@@ -1535,10 +1533,10 @@ def _read_catalog_cache():
         data = json.loads(PLUGIN_CATALOG_CACHE_FILE.read_text(encoding="utf-8"))
         sources = _valid_plugin_catalog(data)
         if sources:
-            return str(data.get("etag") or ""), sources
+            return str(data.get("etag") or ""), _merge_plugin_catalog(DEFAULT_PLUGIN_STORE_SOURCES, sources)
     except Exception:
         pass
-    return "", _packaged_plugin_catalog()
+    return "", _merge_plugin_catalog(DEFAULT_PLUGIN_STORE_SOURCES, _packaged_plugin_catalog())
 
 
 def _write_catalog_cache(etag, sources):
@@ -1550,7 +1548,7 @@ def _write_catalog_cache(etag, sources):
 
 
 def load_plugin_catalog():
-    """Conditionally refresh the catalogue only when BetterASF's file changed."""
+
     global PLUGIN_STORE_SOURCES
     with _PLUGIN_CATALOG_LOCK:
         if not _PLUGIN_CATALOG_STATE["loaded"]:
@@ -1569,11 +1567,12 @@ def load_plugin_catalog():
                 payload = json.loads(response.read().decode("utf-8", "ignore"))
                 sources = _valid_plugin_catalog(payload)
                 if not sources:
-                    raise ValueError("Plugin catalogue format is invalid")
+                    return previous, False, False
+                sources = _merge_plugin_catalog(DEFAULT_PLUGIN_STORE_SOURCES, sources)
                 etag = response.headers.get("ETag") or ""
         except urllib.error.HTTPError as exc:
-            # 304 means that the catalogue is unchanged, which is the normal
-            # fast path when the store is opened repeatedly.
+
+
             if exc.code == 304:
                 return previous, False, True
             return previous, False, False
@@ -1621,12 +1620,12 @@ def _catalog_asset(release, source):
 
 
 def get_plugin_store(force=False):
-    """Read plugin data from GitHub only after the catalogue itself changed."""
+
     sources, catalogue_changed, catalogue_unchanged = load_plugin_catalog()
     now = time.time()
     with _PLUGIN_STORE_LOCK:
-        # A conditional request to plugin_catalog.json happened above. Release
-        # requests are skipped when its ETag/content is unchanged.
+
+
         if not catalogue_changed and _PLUGIN_STORE_CACHE["items"]:
             return {"ok": True, "items": _PLUGIN_STORE_CACHE["items"], "cached": True, "catalogueUnchanged": catalogue_unchanged}
 
@@ -1636,9 +1635,9 @@ def get_plugin_store(force=False):
         item = dict(source)
         repository = source["repository"]
         try:
-            # Name/description and current ZIP release are received from the
-            # developer's GitHub repository. Five catalogue entries and the
-            # one-hour cache keep us under GitHub's anonymous API limit.
+
+
+
             repo = _github_json(f"https://api.github.com/repos/{repository}")
             release = _github_json(f"https://api.github.com/repos/{repository}/releases/latest")
             asset = _catalog_asset(release, source)
@@ -1670,7 +1669,7 @@ def get_plugin_store(force=False):
 
 
 def get_popular_games(force=False):
-    """Return Steam's current global most-played list without using a user API key."""
+
     now = time.time()
     with _POPULAR_GAMES_LOCK:
         if not force and _POPULAR_GAMES_CACHE["games"] and now - _POPULAR_GAMES_CACHE["at"] < 10 * 60:
@@ -1697,7 +1696,7 @@ def get_popular_games(force=False):
 
 
 class ASFPluginManager:
-    """Installs signed-by-source ZIP release assets into ASF's plugins folder safely."""
+
     MAX_DOWNLOAD_BYTES = 128 * 1024 * 1024
     MAX_UNPACKED_BYTES = 384 * 1024 * 1024
     MAX_ARCHIVE_MEMBERS = 4000
@@ -1726,13 +1725,13 @@ class ASFPluginManager:
 
     @staticmethod
     def _assembly_plugin_name(dlls):
-        """Infer a public plugin name from ASF's known assembly names."""
+
         for dll in dlls:
             key = "".join(ch for ch in dll.stem.lower() if ch.isalnum())
             if key in OFFICIAL_PLUGIN_DISPLAY_NAMES:
                 return OFFICIAL_PLUGIN_DISPLAY_NAMES[key]
-        # A resource assembly is not the plugin itself. Prefer the main DLL when
-        # a manually installed plugin has no IPC data available yet.
+
+
         for dll in dlls:
             if not dll.stem.lower().endswith(".resources"):
                 return dll.stem
@@ -1751,8 +1750,8 @@ class ASFPluginManager:
                     continue
                 dlls = list(path.rglob("*.dll"))
                 source = catalog_ids.get(path.name)
-                # Do not expose the technical folder/assembly name as the plugin
-                # title. ASF's API in the UI will override this fallback further.
+
+
                 inferred_name = self._assembly_plugin_name(dlls)
                 items.append({
                     "id": path.name,
@@ -1810,7 +1809,7 @@ class ASFPluginManager:
                     shutil.copyfileobj(inp, out)
         folders = [x for x in staging.iterdir() if x.is_dir()]
         files = [x for x in staging.iterdir() if x.is_file()]
-        # Release ZIPs normally have one outer directory. Remove only that wrapper.
+
         if len(folders) == 1 and not files:
             return folders[0]
         return staging
@@ -1879,7 +1878,1042 @@ class ASFPluginManager:
                 log(f"Plugin removal error ({directory}): {exc}")
                 return {"ok": False, "message": str(exc)}
 
-def make_handler(ui_path, asf_host, asf_port, inject, stats_provider=None, exit_callback=None, plugin_manager=None):
+class SteamMetadataService:
+    def __init__(self, api_key_provider):
+        self.api_key_provider = api_key_provider
+        self.lock = threading.RLock()
+        self.catalog = {}
+        self.loaded = False
+
+    def _load_catalog(self):
+        if self.loaded:
+            return
+        self.loaded = True
+        try:
+            data = json.loads(STEAM_APP_CATALOG_FILE.read_text(encoding="utf-8"))
+            self.catalog = {str(appid): str(name) for appid, name in data.items() if str(appid).isdigit() and str(name)}
+        except Exception:
+            self.catalog = {}
+
+    def _save_catalog(self):
+        try:
+            STEAM_APP_CATALOG_FILE.write_text(json.dumps(self.catalog, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        except Exception:
+            pass
+
+    def add_names(self, games):
+        changed = False
+        with self.lock:
+            self._load_catalog()
+            for game in games or []:
+                try:
+                    appid = int(game.get("appid") if isinstance(game, dict) else game[0])
+                except Exception:
+                    continue
+                name = str(game.get("name") if isinstance(game, dict) else game[1] if len(game) > 1 else "").strip()
+                if appid > 0 and name and self.catalog.get(str(appid)) != name:
+                    self.catalog[str(appid)] = name
+                    changed = True
+            if changed:
+                self._save_catalog()
+
+    def owned_games(self, steam_id):
+        key = str(self.api_key_provider() or "").strip()
+        if not key or not steam_id:
+            return []
+        url = "https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=%s&steamid=%s&include_played_free_games=1&include_appinfo=1&format=json" % (urllib.parse.quote(key), urllib.parse.quote(str(steam_id)))
+        request = urllib.request.Request(url, headers={"User-Agent": f"{APP_NAME}/{APP_VERSION}"})
+        with urllib.request.urlopen(request, timeout=15) as response:
+            data = json.loads(response.read().decode("utf-8", "ignore"))
+        games = (data.get("response") or {}).get("games") or []
+        self.add_names(games)
+        return games
+
+    def metadata(self, appids, steam_id="", language="english"):
+        clean = []
+        for value in appids if isinstance(appids, (list, tuple, set)) else []:
+            try:
+                appid = int(value)
+            except Exception:
+                continue
+            if appid > 0 and appid not in clean:
+                clean.append(appid)
+        clean = clean[:64]
+        with self.lock:
+            self._load_catalog()
+            result = {str(appid): {"name": self.catalog.get(str(appid), "")} for appid in clean}
+        missing = [appid for appid in clean if not result[str(appid)]["name"]]
+        if missing and steam_id:
+            try:
+                self.owned_games(steam_id)
+                with self.lock:
+                    result.update({str(appid): {"name": self.catalog.get(str(appid), "")} for appid in missing})
+            except Exception:
+                pass
+        missing = [appid for appid in clean if not result[str(appid)]["name"]]
+        if missing:
+            self._resolve_store_names(missing, language, result)
+        return {"ok": True, "items": result}
+
+    def _resolve_store_names(self, appids, language, result):
+        allowed = {"english", "russian", "ukrainian"}
+        language = language if language in allowed else "english"
+        def fetch(appid):
+            try:
+                url = f"https://store.steampowered.com/api/appdetails?appids={appid}&l={language}"
+                request = urllib.request.Request(url, headers={"User-Agent": f"{APP_NAME}/{APP_VERSION}"})
+                with urllib.request.urlopen(request, timeout=7) as response:
+                    data = json.loads(response.read().decode("utf-8", "ignore"))
+                app = data.get(str(appid)) or {}
+                details = app.get("data") if app.get("success") else {}
+                return appid, str((details or {}).get("name") or "")
+            except Exception:
+                return appid, ""
+        try:
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=min(6, len(appids))) as executor:
+                for appid, name in executor.map(fetch, appids):
+                    result[str(appid)] = {"name": name}
+                    if name:
+                        self.add_names([{"appid": appid, "name": name}])
+        except Exception:
+            pass
+
+    def cover(self, appid):
+        try:
+            appid = int(appid)
+        except Exception:
+            return None, ""
+        if appid <= 0:
+            return None, ""
+        STEAM_COVERS_DIR.mkdir(parents=True, exist_ok=True)
+        for extension, mime in ((".jpg", "image/jpeg"), (".png", "image/png"), (".webp", "image/webp")):
+            path = STEAM_COVERS_DIR / f"{appid}{extension}"
+            if path.is_file():
+                try:
+                    path.touch()
+                except Exception:
+                    pass
+                return path, mime
+        try:
+            url = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg"
+            request = urllib.request.Request(url, headers={"User-Agent": f"{APP_NAME}/{APP_VERSION}"})
+            with urllib.request.urlopen(request, timeout=12) as response:
+                raw = response.read(5 * 1024 * 1024 + 1)
+            if not raw or len(raw) > 5 * 1024 * 1024:
+                return None, ""
+            if raw.startswith(b"\xff\xd8\xff"):
+                extension, mime = ".jpg", "image/jpeg"
+            elif raw.startswith(b"\x89PNG\r\n\x1a\n"):
+                extension, mime = ".png", "image/png"
+            elif len(raw) >= 12 and raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+                extension, mime = ".webp", "image/webp"
+            else:
+                return None, ""
+            path = STEAM_COVERS_DIR / f"{appid}{extension}"
+            temporary = path.with_suffix(path.suffix + ".part")
+            temporary.write_bytes(raw)
+            temporary.replace(path)
+            self._prune_covers()
+            return path, mime
+        except Exception:
+            return None, ""
+
+    def _prune_covers(self):
+        try:
+            files = [path for path in STEAM_COVERS_DIR.iterdir() if path.is_file()]
+            total = sum(path.stat().st_size for path in files)
+            limit = 300 * 1024 * 1024
+            if total <= limit:
+                return
+            for path in sorted(files, key=lambda item: item.stat().st_atime):
+                if total <= limit:
+                    break
+                size = path.stat().st_size
+                path.unlink(missing_ok=True)
+                total -= size
+        except Exception:
+            pass
+
+
+class SettingsService:
+    def snapshot(self):
+        data = _load_settings()
+        return {
+            "minimize_to_tray": bool(data.get("minimize_to_tray", False)),
+            "autostart": bool(data.get("autostart", False)),
+            "economy_mode": bool(data.get("economy_mode", False)),
+            "auto_hour_farm_after_cards": bool(data.get("auto_hour_farm_after_cards", False)),
+            "start_hour_farm_on_launch": bool(data.get("start_hour_farm_on_launch", False)),
+            "launch_minimized": bool(data.get("launch_minimized", False)),
+            "sidebar_collapsed": bool(data.get("sidebar_collapsed", False)),
+            "language": str(data.get("language", "ru") or "ru"),
+            "theme_full": str(data.get("theme_full", "") or ""),
+            "hour_farm_priority_mode": str(data.get("hour_farm_priority_mode", "hours_desc") or "hours_desc"),
+            "priority_hour_farm_appids": str(data.get("priority_hour_farm_appids", "") or ""),
+            "hour_farm_max_games_by_bot": data.get("hour_farm_max_games_by_bot", {}) if isinstance(data.get("hour_farm_max_games_by_bot", {}), dict) else {},
+            "steam_api_key": bool((RUNTIME.get("steam_api_key") or data.get("steam_api_key") or "").strip()),
+        }
+
+    def update(self, patch):
+        if not isinstance(patch, dict):
+            return {"ok": False, "message": "Invalid settings payload."}
+        ok = True
+        for key, value in patch.items():
+            if key == "autostart":
+                ok = bool(set_autostart_enabled(bool(value))) and ok
+            elif key in ("minimize_to_tray", "economy_mode", "auto_hour_farm_after_cards", "start_hour_farm_on_launch", "launch_minimized", "sidebar_collapsed"):
+                set_app_setting(key, bool(value))
+            elif key == "language" and value in ("ru", "en", "uk"):
+                set_app_setting(key, value)
+            elif key == "theme_full" and value in ("dark", "light", "dark-img", "light-img", "custom"):
+                set_app_setting(key, value)
+            elif key == "hour_farm_priority_mode" and value in ("hours_asc", "hours_desc", "popular"):
+                set_app_setting(key, value)
+            elif key == "priority_hour_farm_appids":
+                clean = "".join(char if (char.isdigit() or char in ",; \n\t") else " " for char in str(value or ""))
+                set_app_setting(key, clean.strip())
+            elif key == "hour_farm_max_games_by_bot":
+                clean = {}
+                if isinstance(value, dict):
+                    for name, limit in value.items():
+                        try:
+                            clean[str(name)] = max(1, min(32, int(limit)))
+                        except Exception:
+                            clean[str(name)] = 32
+                set_app_setting(key, clean)
+            elif key == "steam_api_key":
+                value = str(value or "").strip()
+                RUNTIME["steam_api_key"] = value
+                save_api_key(value)
+            else:
+                ok = False
+        return {"ok": ok, "settings": self.snapshot()}
+
+
+class ThemeService:
+    def state(self):
+        return custom_theme_state()
+
+    def save(self, payload):
+        return save_custom_theme(payload)
+
+
+class EventLogService:
+    def __init__(self):
+        self.lock = threading.RLock()
+        self.events = []
+        self.next_id = 0
+        self._load()
+
+    def _load(self):
+        try:
+            lines = EVENT_LOG_FILE.read_text(encoding="utf-8", errors="ignore").splitlines()[-700:]
+            for line in lines:
+                item = json.loads(line)
+                if isinstance(item, dict) and item.get("message"):
+                    self.events.append(item)
+                    self.next_id = max(self.next_id, int(item.get("id") or 0))
+        except Exception:
+            pass
+
+    def record(self, message, level="info", source="ui", language=""):
+        with self.lock:
+            self.next_id += 1
+            item = {"id": self.next_id, "time": int(time.time()), "message": str(message), "level": str(level), "source": str(source), "language": str(language)}
+            self.events.append(item)
+            if len(self.events) > 700:
+                self.events = self.events[-700:]
+            try:
+                with open(EVENT_LOG_FILE, "a", encoding="utf-8") as file:
+                    file.write(json.dumps(item, ensure_ascii=False) + "\n")
+                if EVENT_LOG_FILE.stat().st_size > 2 * 1024 * 1024:
+                    EVENT_LOG_FILE.write_text("\n".join(json.dumps(event, ensure_ascii=False) for event in self.events) + "\n", encoding="utf-8")
+            except Exception:
+                pass
+            return item
+
+    def status(self, since=0):
+        with self.lock:
+            return {"ok": True, "events": [event for event in self.events if event["id"] > int(since or 0)], "lastEventId": self.next_id}
+
+    def clear(self):
+        with self.lock:
+            self.events = []
+            self.next_id = 0
+            try:
+                EVENT_LOG_FILE.unlink(missing_ok=True)
+            except Exception:
+                pass
+        return {"ok": True}
+
+
+class CacheService:
+    def __init__(self, steam_metadata_service=None, event_log_service=None):
+        self.steam_metadata_service = steam_metadata_service
+        self.event_log_service = event_log_service
+
+    @staticmethod
+    def _size(path):
+        try:
+            if path.is_file():
+                return path.stat().st_size
+            return sum(item.stat().st_size for item in path.rglob("*") if item.is_file())
+        except Exception:
+            return 0
+
+    def status(self):
+        return {
+            "ok": True,
+            "items": {
+                "steam_names": self._size(STEAM_APP_CATALOG_FILE),
+                "steam_covers": self._size(STEAM_COVERS_DIR),
+                "plugin_catalog": self._size(PLUGIN_CATALOG_CACHE_FILE),
+                "events": self._size(EVENT_LOG_FILE),
+            },
+        }
+
+    def clear(self, name):
+        targets = {
+            "steam_names": STEAM_APP_CATALOG_FILE,
+            "steam_covers": STEAM_COVERS_DIR,
+            "plugin_catalog": PLUGIN_CATALOG_CACHE_FILE,
+            "events": EVENT_LOG_FILE,
+        }
+        target = targets.get(name)
+        if not target:
+            return {"ok": False, "message": "Unknown cache target."}
+        try:
+            if name == "events" and self.event_log_service:
+                return self.event_log_service.clear()
+            if target.is_dir():
+                shutil.rmtree(target, ignore_errors=True)
+            else:
+                target.unlink(missing_ok=True)
+            if name == "steam_names" and self.steam_metadata_service:
+                with self.steam_metadata_service.lock:
+                    self.steam_metadata_service.catalog = {}
+                    self.steam_metadata_service.loaded = False
+            return {"ok": True}
+        except Exception as exc:
+            return {"ok": False, "message": str(exc)}
+
+
+class DiagnosticsService:
+    def __init__(self, bot_service, hour_farm_service, login_request_service, cache_service):
+        self.bot_service = bot_service
+        self.hour_farm_service = hour_farm_service
+        self.login_request_service = login_request_service
+        self.cache_service = cache_service
+
+    def status(self):
+        try:
+            bots = self.bot_service.bots().get("bots") or {}
+            bot_count = len(bots)
+        except Exception as exc:
+            bot_count = 0
+            bots_error = str(exc)
+        else:
+            bots_error = ""
+        runtime = find_asf_executable("")
+        return {
+            "ok": True,
+            "app_version": APP_VERSION,
+            "asf_runtime": runtime or "",
+            "asf_ipc": ipc_ready("127.0.0.1", self.bot_service.port),
+            "bot_count": bot_count,
+            "bots_error": bots_error,
+            "hour_farm": self.hour_farm_service.status(),
+            "login_requests": self.login_request_service.status(),
+            "cache": self.cache_service.status().get("items", {}),
+            "log_files": {
+                "debug": str(DATA_DIR / "debug-log.txt"),
+                "launch": str(DATA_DIR / "asf-launch.log"),
+            },
+        }
+
+
+class UpdateService:
+    def __init__(self, bot_service):
+        self.bot_service = bot_service
+
+    def status(self):
+        try:
+            asf = self.bot_service.request("/Api/ASF").get("Result") or {}
+        except Exception:
+            asf = {}
+        return {
+            "ok": True,
+            "betterasf": check_github_update(),
+            "asf_version": asf.get("Version") if isinstance(asf, dict) else None,
+            "plugin_catalog": {"count": len(PLUGIN_STORE_SOURCES)},
+        }
+
+
+class BotService:
+    def __init__(self, host, port, password_provider):
+        self.host = host
+        self.port = int(port)
+        self.password_provider = password_provider
+        self.state_lock = threading.RLock()
+        self.running_since = {}
+        self.online_since = {}
+
+    def _hosts(self):
+        result = []
+        for host in (self.host, "127.0.0.1", "localhost"):
+            if host and host not in result:
+                result.append(host)
+        return result
+
+    def request(self, path, method="GET", payload=None, timeout=10):
+        body = json.dumps(payload).encode("utf-8") if payload is not None else None
+        last_error = None
+        for host in self._hosts():
+            request = urllib.request.Request(f"http://{host}:{self.port}{path}", data=body, method=method)
+            request.add_header("Content-Type", "application/json")
+            password = self.password_provider() or ""
+            if password:
+                request.add_header("Authentication", password)
+            try:
+                with urllib.request.urlopen(request, timeout=timeout) as response:
+                    raw = response.read().decode("utf-8", "ignore")
+                    return json.loads(raw) if raw else {}
+            except Exception as exc:
+                last_error = exc
+        raise RuntimeError(str(last_error or "ASF unavailable"))
+
+    def bots(self):
+        data = self.request("/Api/Bot/ASF")
+        bots = data.get("Result") if isinstance(data, dict) else {}
+        bots = bots if isinstance(bots, dict) else {}
+        now = time.time()
+        with self.state_lock:
+            names = set(bots)
+            self.running_since = {name: value for name, value in self.running_since.items() if name in names}
+            self.online_since = {name: value for name, value in self.online_since.items() if name in names}
+            for name, bot in bots.items():
+                if not isinstance(bot, dict):
+                    continue
+                if bot.get("KeepRunning"):
+                    self.running_since.setdefault(name, now)
+                else:
+                    self.running_since.pop(name, None)
+                if bot.get("IsConnectedAndLoggedOn"):
+                    self.online_since.setdefault(name, now)
+                else:
+                    self.online_since.pop(name, None)
+                bot["BetterASFRunningSeconds"] = int(now - self.running_since[name]) if name in self.running_since else 0
+                bot["BetterASFOnlineSeconds"] = int(now - self.online_since[name]) if name in self.online_since else 0
+        return {"ok": True, "bots": bots}
+
+    def profile(self, name):
+        bots = self.bots().get("bots") or {}
+        bot = bots.get(name)
+        if not isinstance(bot, dict):
+            return {"ok": False, "message": "Bot was not found."}
+        return {"ok": True, "bot": bot}
+
+    def action(self, name, action):
+        bots = self.bots().get("bots") or {}
+        bot = bots.get(name)
+        if not isinstance(bot, dict):
+            return {"ok": False, "message": "Bot was not found."}
+        if action in ("enable", "disable"):
+            config = dict(bot.get("BotConfig") or {})
+            enabled = action == "enable"
+            config["Enabled"] = enabled
+            self.request("/Api/Bot/" + urllib.parse.quote(name), "POST", {"BotConfig": config})
+            if not enabled and bot.get("KeepRunning"):
+                self.request("/Api/Bot/" + urllib.parse.quote(name) + "/Stop", "POST", {})
+            return {"ok": True, "enabled": enabled}
+        paths = {
+            "start": ("/Start", {}),
+            "stop": ("/Stop", {}),
+            "resume": ("/Resume", {}),
+            "pause": ("/Pause", {"Permanent": True, "ResumeInSeconds": 0}),
+            "reset": ("/Api/Command", {"Command": "reset " + name}),
+        }
+        if action not in paths:
+            return {"ok": False, "message": "Unsupported bot action."}
+        suffix, payload = paths[action]
+        if action == "reset":
+            self.request(suffix, "POST", payload)
+        else:
+            self.request("/Api/Bot/" + urllib.parse.quote(name) + suffix, "POST", payload)
+        return {"ok": True, "action": action}
+
+    def input(self, name, input_type, value):
+        self.request("/Api/Bot/" + urllib.parse.quote(name) + "/Input", "POST", {"Type": int(input_type), "Value": str(value)})
+        return {"ok": True}
+
+
+class BotConfigService:
+    def __init__(self, bot_service):
+        self.bot_service = bot_service
+
+    @staticmethod
+    def _number(value, default, minimum=0, maximum=255):
+        try:
+            return max(minimum, min(maximum, int(value)))
+        except Exception:
+            return default
+
+    @staticmethod
+    def _bool(value, default=False):
+        return bool(value) if value is not None else default
+
+    def _existing_config(self, name):
+        bots = self.bot_service.bots().get("bots") or {}
+        bot = bots.get(name) or {}
+        return dict(bot.get("BotConfig") or {}) if isinstance(bot, dict) else {}
+
+    def _form(self, name, config):
+        farming = int(config.get("FarmingPreferences") or 0)
+        trading = int(config.get("TradingPreferences") or 0)
+        behaviour = int(config.get("BotBehaviour") or 0)
+        redeeming = int(config.get("RedeemingPreferences") or 0)
+        limits = _load_settings().get("hour_farm_max_games_by_bot")
+        try:
+            hour_max = max(1, min(32, int((limits or {}).get(name, 32))))
+        except Exception:
+            hour_max = 32
+        return {
+            "name": name,
+            "steam_login": config.get("SteamLogin") or "",
+            "enabled": config.get("Enabled") is not False,
+            "online_status": config.get("OnlineStatus", 1),
+            "hours_until_cards": config.get("HoursUntilCardDrops", 3),
+            "farm_paused": bool(farming & 1),
+            "shutdown_after_farm": bool(farming & 2),
+            "priority_only": bool(farming & 8),
+            "skip_unplayed": bool(farming & 32),
+            "accept_donations": bool(trading & 1),
+            "matcher": bool(trading & 2),
+            "match_all": bool(trading & 4),
+            "no_bot_trades": bool(trading & 8),
+            "match_actively": bool(trading & 16),
+            "accept_gifts": bool(config.get("AcceptGifts")),
+            "reject_friends": bool(behaviour & 1),
+            "reject_trades": bool(behaviour & 2),
+            "reject_groups": bool(behaviour & 4),
+            "dismiss_notifications": bool(behaviour & 8),
+            "mark_read": bool(behaviour & 16),
+            "mark_self": bool(behaviour & 32),
+            "no_incoming_trades": bool(behaviour & 64),
+            "forwarding": bool(redeeming & 1),
+            "distributing": bool(redeeming & 2),
+            "keep_missing": bool(redeeming & 4),
+            "assume_wallet": bool(redeeming & 8),
+            "farm_order": (config.get("FarmingOrders") or [0])[0],
+            "ui_mode": config.get("UserInterfaceMode", 0),
+            "device": config.get("GamingDeviceType", 1),
+            "trade_check": config.get("TradeCheckPeriod", 60),
+            "send_trade": config.get("SendTradePeriod", 0),
+            "trade_token": config.get("SteamTradeToken") or "",
+            "machine": config.get("MachineName") or "",
+            "custom_farm": config.get("CustomGamePlayedWhileFarming") or "",
+            "custom_idle": config.get("CustomGamePlayedWhileIdle") or "",
+            "idle_games": config.get("GamesPlayedWhileIdle") or [],
+            "parental_code": config.get("SteamParentalCode") or "",
+            "use_login_keys": config.get("UseLoginKeys") is not False,
+            "hour_max": hour_max,
+        }
+
+    def form(self, name):
+        return {"ok": True, "form": self._form(name, self._existing_config(name))}
+
+    def save(self, fields):
+        if not isinstance(fields, dict):
+            return {"ok": False, "message": "Invalid bot form."}
+        name = str(fields.get("name") or "").strip()
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
+            return {"ok": False, "message": "Bot name is invalid."}
+        farming = (1 if self._bool(fields.get("farm_paused")) else 0) | (2 if self._bool(fields.get("shutdown_after_farm")) else 0) | (8 if self._bool(fields.get("priority_only")) else 0) | (32 if self._bool(fields.get("skip_unplayed")) else 0)
+        trading = (1 if self._bool(fields.get("accept_donations")) else 0) | (2 if self._bool(fields.get("matcher")) else 0) | (4 if self._bool(fields.get("match_all")) else 0) | (8 if self._bool(fields.get("no_bot_trades")) else 0) | (16 if self._bool(fields.get("match_actively")) else 0)
+        behaviour = (1 if self._bool(fields.get("reject_friends")) else 0) | (2 if self._bool(fields.get("reject_trades")) else 0) | (4 if self._bool(fields.get("reject_groups")) else 0) | (8 if self._bool(fields.get("dismiss_notifications")) else 0) | (16 if self._bool(fields.get("mark_read")) else 0) | (32 if self._bool(fields.get("mark_self")) else 0) | (64 if self._bool(fields.get("no_incoming_trades")) else 0)
+        redeeming = (1 if self._bool(fields.get("forwarding")) else 0) | (2 if self._bool(fields.get("distributing")) else 0) | (4 if self._bool(fields.get("keep_missing")) else 0) | (8 if self._bool(fields.get("assume_wallet")) else 0)
+        idle_games = []
+        for value in fields.get("idle_games") or []:
+            try:
+                appid = int(value)
+            except Exception:
+                continue
+            if appid > 0 and appid not in idle_games:
+                idle_games.append(appid)
+        config = {
+            "Enabled": self._bool(fields.get("enabled"), True),
+            "OnlineStatus": self._number(fields.get("online_status"), 1, 0, 7),
+            "HoursUntilCardDrops": self._number(fields.get("hours_until_cards"), 3),
+            "FarmingPreferences": farming,
+            "TradingPreferences": trading,
+            "BotBehaviour": behaviour,
+            "RedeemingPreferences": redeeming,
+            "AcceptGifts": self._bool(fields.get("accept_gifts")),
+            "UseLoginKeys": self._bool(fields.get("use_login_keys"), True),
+            "FarmingOrders": [self._number(fields.get("farm_order"), 0, 0, 8)],
+            "UserInterfaceMode": self._number(fields.get("ui_mode"), 0, 0, 2),
+            "GamingDeviceType": self._number(fields.get("device"), 1, 1, 4),
+            "TradeCheckPeriod": self._number(fields.get("trade_check"), 60),
+            "SendTradePeriod": self._number(fields.get("send_trade"), 0),
+            "GamesPlayedWhileIdle": idle_games,
+            "s_SteamMasterClanID": BETTERASF_CLAN_ID,
+            "RemoteCommunication": 2,
+        }
+        string_fields = {
+            "SteamLogin": fields.get("steam_login"),
+            "SteamPassword": fields.get("steam_password"),
+            "SteamTradeToken": fields.get("trade_token"),
+            "MachineName": fields.get("machine"),
+            "CustomGamePlayedWhileFarming": fields.get("custom_farm"),
+            "CustomGamePlayedWhileIdle": fields.get("custom_idle"),
+            "SteamParentalCode": fields.get("parental_code"),
+        }
+        for key, value in string_fields.items():
+            value = str(value or "").strip()
+            if value:
+                config[key] = value
+        self.bot_service.request("/Api/Bot/" + urllib.parse.quote(name), "POST", {"BotConfig": config})
+        settings = _load_settings()
+        limits = settings.get("hour_farm_max_games_by_bot") if isinstance(settings.get("hour_farm_max_games_by_bot"), dict) else {}
+        limits[name] = self._number(fields.get("hour_max"), 32, 1, 32)
+        _save_settings({"hour_farm_max_games_by_bot": limits})
+        return {"ok": True, "name": name}
+
+    def delete(self, name):
+        self.bot_service.request("/Api/Bot/" + urllib.parse.quote(name), "DELETE")
+        limits = _load_settings().get("hour_farm_max_games_by_bot")
+        if isinstance(limits, dict) and name in limits:
+            limits.pop(name, None)
+            _save_settings({"hour_farm_max_games_by_bot": limits})
+        return {"ok": True}
+
+
+class LoginRequestService:
+    def __init__(self, bot_service, stop_event):
+        self.bot_service = bot_service
+        self.stop_event = stop_event
+        self.lock = threading.RLock()
+        self.requests = {}
+        self.deferred = set()
+        self.events = []
+        self.event_id = 0
+        self.started = False
+        self.thread = None
+        self._load_state()
+
+    def _load_state(self):
+        try:
+            data = json.loads(LOGIN_REQUEST_STATE_FILE.read_text(encoding="utf-8"))
+            self.deferred = set(str(x) for x in data.get("deferred") or [])
+        except Exception:
+            pass
+
+    def _save_state(self):
+        try:
+            LOGIN_REQUEST_STATE_FILE.write_text(json.dumps({"deferred": sorted(self.deferred)}), encoding="utf-8")
+        except Exception:
+            pass
+
+    def _event(self, key, **data):
+        self.event_id += 1
+        self.events.append({"id": self.event_id, "time": int(time.time()), "key": key, "data": data})
+        if len(self.events) > 80:
+            self.events = self.events[-80:]
+
+    @staticmethod
+    def _key(bot, input_type):
+        return str(bot) + ":" + str(input_type)
+
+    def start(self):
+        if self.started:
+            return
+        self.started = True
+        self.thread = threading.Thread(target=self._loop, daemon=True)
+        self.thread.start()
+
+    def stop(self):
+        self.started = False
+
+    def _sync(self):
+        bots = self.bot_service.bots().get("bots") or {}
+        current = {}
+        for name, bot in bots.items():
+            try:
+                input_type = int(bot.get("RequiredInput")) if isinstance(bot, dict) else 0
+            except Exception:
+                input_type = 0
+            if input_type in (1, 2, 3, 4, 5, 7):
+                key = self._key(name, input_type)
+                current[key] = {"bot": name, "type": input_type}
+        with self.lock:
+            previous = set(self.requests)
+            self.requests = current
+            for key in set(current) - previous:
+                self._event("login_request_new", bot=current[key]["bot"], input_type=current[key]["type"])
+            for key in previous - set(current):
+                self.deferred.discard(key)
+                self._event("login_request_resolved", bot=key.rsplit(":", 1)[0])
+            self.deferred.intersection_update(current)
+            self._save_state()
+
+    def _loop(self):
+        while self.started and not self.stop_event.is_set():
+            try:
+                self._sync()
+            except Exception as exc:
+                with self.lock:
+                    self._event("login_request_poll_error", error=str(exc))
+            self.stop_event.wait(5)
+
+    def status(self, since=0):
+        with self.lock:
+            requests = []
+            for key, item in self.requests.items():
+                requests.append({"bot": item["bot"], "type": item["type"], "deferred": key in self.deferred})
+            return {"ok": True, "requests": requests, "events": [item for item in self.events if item["id"] > int(since or 0)], "lastEventId": self.event_id}
+
+    def defer(self, keys=None):
+        with self.lock:
+            selected = set(str(key) for key in keys) if isinstance(keys, list) else set(self.requests)
+            self.deferred.update(key for key in selected if key in self.requests)
+            self._save_state()
+        return self.status()
+
+    def submit(self, bot, input_type, value):
+        result = self.bot_service.input(bot, input_type, value)
+        with self.lock:
+            self.deferred.discard(self._key(bot, input_type))
+            self._save_state()
+        return result
+
+
+class HourFarmService:
+    def __init__(self, host, port, password_provider, stop_event, steam_metadata_service=None):
+        self.host = host
+        self.port = int(port)
+        self.password_provider = password_provider
+        self.stop_event = stop_event
+        self.steam_metadata_service = steam_metadata_service
+        self.lock = threading.RLock()
+        self.operation_lock = threading.Lock()
+        self.active = {}
+        self.seen_card_work = set()
+        self.auto_boosted = set()
+        self.reapply_at = {}
+        self.events = []
+        self.event_id = 0
+        self.started = False
+        self.startup_done = False
+        self.startup_started_at = 0.0
+        self.thread = None
+        self._load_state()
+
+    def _load_state(self):
+        try:
+            data = json.loads(HOUR_FARM_STATE_FILE.read_text(encoding="utf-8"))
+            active = data.get("active") if isinstance(data, dict) else {}
+            if isinstance(active, dict):
+                self.active = {str(name): [int(x) for x in ids if int(x) > 0] for name, ids in active.items() if isinstance(ids, list)}
+                self.auto_boosted = set(self.active)
+        except Exception:
+            pass
+
+    def _save_state(self):
+        try:
+            HOUR_FARM_STATE_FILE.write_text(json.dumps({"active": self.active}, ensure_ascii=False), encoding="utf-8")
+        except Exception:
+            pass
+
+    def _event(self, key, **data):
+        with self.lock:
+            self.event_id += 1
+            self.events.append({"id": self.event_id, "time": int(time.time()), "key": key, "data": data})
+            if len(self.events) > 120:
+                self.events = self.events[-120:]
+
+    def status(self, since=0):
+        with self.lock:
+            return {
+                "ok": True,
+                "active": {name: list(ids) for name, ids in self.active.items()},
+                "events": [item for item in self.events if item["id"] > int(since or 0)],
+                "lastEventId": self.event_id,
+            }
+
+    def start(self):
+        if self.started:
+            return
+        self.started = True
+        self.startup_started_at = time.time()
+        self.thread = threading.Thread(target=self._loop, daemon=True)
+        self.thread.start()
+
+    def stop(self):
+        self.started = False
+
+    def _hosts(self):
+        result = []
+        for host in (self.host, "127.0.0.1", "localhost"):
+            if host and host not in result:
+                result.append(host)
+        return result
+
+    def _asf_api(self, path, method="GET", payload=None, timeout=10):
+        body = json.dumps(payload).encode("utf-8") if payload is not None else None
+        last_error = None
+        for host in self._hosts():
+            request = urllib.request.Request(f"http://{host}:{self.port}{path}", data=body, method=method)
+            request.add_header("Content-Type", "application/json")
+            password = self.password_provider() or ""
+            if password:
+                request.add_header("Authentication", password)
+            try:
+                with urllib.request.urlopen(request, timeout=timeout) as response:
+                    raw = response.read().decode("utf-8", "ignore")
+                    return json.loads(raw) if raw else {}
+            except Exception as exc:
+                last_error = exc
+        raise RuntimeError(str(last_error or "ASF unavailable"))
+
+    def _bots(self):
+        data = self._asf_api("/Api/Bot/ASF")
+        result = data.get("Result") if isinstance(data, dict) else {}
+        return result if isinstance(result, dict) else {}
+
+    @staticmethod
+    def _enabled(bot):
+        if not isinstance(bot, dict) or bot.get("Enabled") is False:
+            return False
+        config = bot.get("BotConfig") or {}
+        return config.get("Enabled") is not False and bot.get("KeepRunning") is not False
+
+    @classmethod
+    def _idle(cls, bot):
+        if not cls._enabled(bot) or not bot.get("IsConnectedAndLoggedOn"):
+            return False
+        farmer = bot.get("CardsFarmer") or {}
+        return not (farmer.get("CurrentGamesFarming") or []) and not (farmer.get("GamesToFarm") or [])
+
+    @classmethod
+    def _card_queue(cls, bot):
+        if not cls._enabled(bot) or not bot.get("IsConnectedAndLoggedOn"):
+            return False
+        return bool((bot.get("CardsFarmer") or {}).get("GamesToFarm") or [])
+
+    @staticmethod
+    def _parse_appids(text):
+        result = []
+        for value in re.findall(r"\d+", str(text or "")):
+            appid = int(value)
+            if appid > 0 and appid not in result:
+                result.append(appid)
+        return result
+
+    @staticmethod
+    def _settings():
+        data = _load_settings()
+        mode = str(data.get("hour_farm_priority_mode") or "hours_desc")
+        if mode not in ("hours_asc", "hours_desc", "popular"):
+            mode = "hours_desc"
+        limits = data.get("hour_farm_max_games_by_bot") if isinstance(data.get("hour_farm_max_games_by_bot"), dict) else {}
+        return {
+            "auto": bool(data.get("auto_hour_farm_after_cards", False)),
+            "startup": bool(data.get("start_hour_farm_on_launch", False)),
+            "priority": HourFarmService._parse_appids(data.get("priority_hour_farm_appids", "")),
+            "mode": mode,
+            "limits": limits,
+            "api_key": str(RUNTIME.get("steam_api_key") or data.get("steam_api_key") or "").strip(),
+        }
+
+    @staticmethod
+    def _limit(limits, name):
+        try:
+            return max(1, min(32, int(limits.get(name, 32))))
+        except Exception:
+            return 32
+
+    def _owned_games(self, steam_id, api_key):
+        url = "https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=%s&steamid=%s&include_played_free_games=1&include_appinfo=1&format=json" % (urllib.parse.quote(api_key), urllib.parse.quote(str(steam_id)))
+        request = urllib.request.Request(url, headers={"User-Agent": f"{APP_NAME}/{APP_VERSION}"})
+        with urllib.request.urlopen(request, timeout=15) as response:
+            data = json.loads(response.read().decode("utf-8", "ignore"))
+        response = data.get("response") or {}
+        raw_games = response.get("games") or []
+        if "games" not in response:
+            return None
+        if self.steam_metadata_service:
+            self.steam_metadata_service.add_names(raw_games)
+        games = []
+        for game in raw_games:
+            try:
+                appid = int(game.get("appid"))
+            except Exception:
+                continue
+            if appid > 0:
+                games.append({"appid": appid, "hours": float(game.get("playtime_forever") or 0) / 60.0})
+        return games
+
+    def _popular_ids(self):
+        data = get_popular_games()
+        return [int(item["appID"]) for item in data.get("games") or [] if item.get("appID")]
+
+    def _play(self, name, appids):
+        self._asf_api("/Api/Command", "POST", {"Command": "play " + name + " " + ",".join(str(x) for x in appids)})
+
+    def _reset(self, name):
+        self._asf_api("/Api/Command", "POST", {"Command": "reset " + name})
+
+    def start_hour_farm(self, targets=None, reason="manual"):
+        with self.operation_lock:
+            settings = self._settings()
+            if not settings["api_key"]:
+                self._event("hour_service_need_api_key")
+                return {"ok": False, "message": "Steam Web API key is required."}
+            try:
+                bots = self._bots()
+            except Exception as exc:
+                self._event("hour_service_asf_unavailable", error=str(exc))
+                return {"ok": False, "message": str(exc)}
+            allowed = set(targets or []) if targets else None
+            names = [name for name, bot in bots.items() if self._idle(bot) and (allowed is None or name in allowed)]
+            if not names:
+                self._event("hour_service_no_targets")
+                return {"ok": True, "started": 0}
+            owned = {}
+            for name in names:
+                bot = bots[name]
+                steam_id = bot.get("s_SteamID") or bot.get("SteamID")
+                if not steam_id:
+                    self._event("hour_service_skip_no_steamid", bot=name)
+                    continue
+                try:
+                    games = self._owned_games(steam_id, settings["api_key"])
+                except Exception as exc:
+                    self._event("hour_service_games_error", bot=name, error=str(exc))
+                    continue
+                if games is None:
+                    self._event("hour_service_private_games", bot=name)
+                    continue
+                owned[name] = games
+            popular = self._popular_ids() if settings["mode"] == "popular" else []
+            used_popular = set()
+            started = 0
+            for name, games in owned.items():
+                max_games = self._limit(settings["limits"], name)
+                game_ids = {item["appid"] for item in games}
+                selected = [appid for appid in settings["priority"] if appid in game_ids][:max_games]
+                selected_set = set(selected)
+                ordered = sorted(games, key=lambda item: (item["hours"], item["appid"]) if settings["mode"] == "hours_asc" else (-item["hours"], item["appid"]))
+                candidates = ordered
+                if settings["mode"] == "popular" and popular:
+                    popular_games = [appid for appid in popular if appid in game_ids and appid not in used_popular]
+                    candidates = [{"appid": appid} for appid in popular_games] + ordered
+                for item in candidates:
+                    appid = int(item["appid"])
+                    if len(selected) >= max_games:
+                        break
+                    if appid in selected_set:
+                        continue
+                    selected.append(appid)
+                    selected_set.add(appid)
+                    if appid in popular:
+                        used_popular.add(appid)
+                if not selected:
+                    continue
+                try:
+                    self._play(name, selected)
+                    with self.lock:
+                        self.active[name] = selected
+                        self.auto_boosted.add(name)
+                        self.reapply_at[name] = time.time() + 600
+                        self._save_state()
+                    self._event("hour_service_started", bot=name, count=len(selected), reason=reason)
+                    started += 1
+                except Exception as exc:
+                    self._event("hour_service_play_error", bot=name, error=str(exc))
+            if not started:
+                self._event("hour_service_no_games")
+            return {"ok": True, "started": started}
+
+    def _return_cards(self, bots):
+        for name in list(self.active):
+            bot = bots.get(name) or {}
+            valid = self._enabled(bot) and bool(bot.get("IsConnectedAndLoggedOn"))
+            queued_cards = self._card_queue(bot)
+            if not valid and not queued_cards:
+                with self.lock:
+                    self.active.pop(name, None)
+                    self.auto_boosted.discard(name)
+                    self.reapply_at.pop(name, None)
+                    self._save_state()
+                continue
+            if not queued_cards:
+                continue
+            with self.lock:
+                self.active.pop(name, None)
+                self.auto_boosted.discard(name)
+                self.reapply_at.pop(name, None)
+                self._save_state()
+            try:
+                self._reset(name)
+                self._event("hour_service_cards_take_over", bot=name)
+            except Exception as exc:
+                self._event("hour_service_reset_error", bot=name, error=str(exc))
+
+    def _auto_after_cards(self, bots, settings):
+        if not settings["auto"]:
+            return
+        names = list(bots)
+        if not self.seen_card_work:
+            for name in names:
+                if self._card_queue(bots[name]):
+                    self.seen_card_work.add(name)
+            return
+        for name in names:
+            if self._card_queue(bots[name]):
+                self.seen_card_work.add(name)
+                self.auto_boosted.discard(name)
+        targets = [name for name in names if self._idle(bots[name]) and name in self.seen_card_work and name not in self.auto_boosted]
+        if targets:
+            self.start_hour_farm(targets, "after_cards")
+
+    def _startup(self, bots, settings):
+        if not settings["startup"] or self.startup_done:
+            return
+        pending = [name for name, bot in bots.items() if self._enabled(bot) and not bot.get("IsConnectedAndLoggedOn") and not bot.get("RequiredInput")]
+        if pending and time.time() - self.startup_started_at < 180:
+            return
+        self.startup_done = True
+        targets = [name for name, bot in bots.items() if self._idle(bot)]
+        if targets:
+            self.start_hour_farm(targets, "startup")
+
+    def _reapply(self, bots, settings):
+        if not (settings["auto"] or settings["startup"]):
+            return
+        now = time.time()
+        targets = [name for name in self.active if self._idle(bots.get(name) or {}) and now >= self.reapply_at.get(name, 0)]
+        if targets:
+            for name in targets:
+                self.reapply_at[name] = now + 600
+            self.start_hour_farm(targets, "reconnect")
+
+    def _loop(self):
+        while self.started and not self.stop_event.is_set():
+            try:
+                settings = self._settings()
+                bots = self._bots()
+                self._return_cards(bots)
+                self._startup(bots, settings)
+                self._auto_after_cards(bots, settings)
+                self._reapply(bots, settings)
+            except Exception as exc:
+                self._event("hour_service_poll_error", error=str(exc))
+            self.stop_event.wait(7)
+
+
+def make_handler(ui_path, asf_host, asf_port, inject, stats_provider=None, exit_callback=None, plugin_manager=None, hour_farm_service=None, bot_service=None, login_request_service=None, bot_config_service=None, steam_metadata_service=None, settings_service=None, theme_service=None, event_log_service=None, cache_service=None, diagnostics_service=None, update_service=None):
     class Handler(http.server.BaseHTTPRequestHandler):
         timeout = 10
         good_host = None
@@ -1940,6 +2974,8 @@ def make_handler(ui_path, asf_host, asf_port, inject, stats_provider=None, exit_
             length = int(self.headers.get("Content-Length", 0) or 0)
             body = self.rfile.read(length) if length else None
             candidates = []
+            if self.headers.get("Authentication"):
+                RUNTIME["ipc_password"] = self.headers.get("Authentication")
             if Handler.good_host:
                 candidates.append(Handler.good_host)
             for h in (asf_host, "127.0.0.1", "localhost", "[::1]"):
@@ -2005,13 +3041,14 @@ def make_handler(ui_path, asf_host, asf_port, inject, stats_provider=None, exit_
             }
             self._send_bytes(json.dumps(info).encode(), "application/json")
 
-        def _custom_theme_image(self):
-            image = _custom_theme_image_path()
-            if not image:
+        def _custom_theme_media(self):
+            media = _custom_theme_media_path()
+            if not media:
                 self.send_error(404)
                 return
             try:
-                self._send_bytes(image.read_bytes(), _CUSTOM_THEME_IMAGE_TYPES.get(image.suffix.lower(), "application/octet-stream"))
+                mime = _CUSTOM_THEME_MEDIA_TYPES.get(media.suffix.lower(), ("application/octet-stream", ""))[0]
+                self._send_bytes(media.read_bytes(), mime)
             except Exception:
                 self.send_error(404)
 
@@ -2021,7 +3058,7 @@ def make_handler(ui_path, asf_host, asf_port, inject, stats_provider=None, exit_
                 return
             try:
                 length = int(self.headers.get("Content-Length", 0) or 0)
-                if length > _CUSTOM_THEME_MAX_BYTES * 2:
+                if length > _CUSTOM_THEME_MAX_VIDEO_BYTES * 2:
                     raise ValueError("Request is too large")
                 payload = json.loads(self.rfile.read(length).decode("utf-8", "ignore") or "{}")
             except Exception as exc:
@@ -2032,64 +3069,82 @@ def make_handler(ui_path, asf_host, asf_port, inject, stats_provider=None, exit_
 
         def _settings(self):
             if self.command == "GET":
-                data = _load_settings()
-                payload = {
-                    "minimize_to_tray": bool(data.get("minimize_to_tray", False)),
-                    "autostart": bool(data.get("autostart", False)),
-                    "economy_mode": bool(data.get("economy_mode", False)),
-                    "auto_hour_farm_after_cards": bool(data.get("auto_hour_farm_after_cards", False)),
-                    "start_hour_farm_on_launch": bool(data.get("start_hour_farm_on_launch", False)),
-                    "launch_minimized": bool(data.get("launch_minimized", False)),
-                    "language": str(data.get("language", "ru") or "ru"),
-                    "hour_farm_priority_mode": str(data.get("hour_farm_priority_mode", "hours_desc") or "hours_desc"),
-                    "priority_hour_farm_appids": str(data.get("priority_hour_farm_appids", "") or ""),
-                    "hour_farm_max_games_by_bot": data.get("hour_farm_max_games_by_bot", {}) if isinstance(data.get("hour_farm_max_games_by_bot", {}), dict) else {},
-                    "steam_api_key": bool((RUNTIME.get("steam_api_key") or data.get("steam_api_key") or "").strip()),
-                    "ui_mode": inject.get("interfaceMode", "browser"),
-                }
-                self._send_bytes(json.dumps(payload).encode(), "application/json")
+                result = settings_service.snapshot() if settings_service else {}
+                self._send_bytes(json.dumps(result).encode(), "application/json")
                 return
             try:
                 length = int(self.headers.get("Content-Length", 0) or 0)
-                raw = self.rfile.read(length).decode("utf-8", "ignore") if length else "{}"
-                patch = json.loads(raw or "{}")
+                payload = json.loads(self.rfile.read(length).decode("utf-8", "ignore") or "{}")
             except Exception:
-                self._send_bytes(json.dumps({"ok": False, "message": "bad json"}).encode(), "application/json", 400)
+                payload = {}
+            result = settings_service.update(payload) if settings_service else {"ok": False, "message": "Settings service is unavailable."}
+            self._send_bytes(json.dumps(result).encode(), "application/json", 200 if result.get("ok") else 400)
+
+        def _theme(self):
+            if self.command == "GET":
+                result = theme_service.state() if theme_service else {"ok": False}
+            else:
+                try:
+                    length = int(self.headers.get("Content-Length", 0) or 0)
+                    payload = json.loads(self.rfile.read(length).decode("utf-8", "ignore") or "{}")
+                except Exception:
+                    payload = {}
+                result = theme_service.save(payload) if theme_service else {"ok": False, "message": "Theme service is unavailable."}
+            self._send_bytes(json.dumps(result).encode(), "application/json", 200 if result.get("ok") else 400)
+
+        def _events(self):
+            if self.command == "GET":
+                try:
+                    query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                    since = int((query.get("since") or [0])[0])
+                except Exception:
+                    since = 0
+                result = event_log_service.status(since) if event_log_service else {"ok": False}
+            else:
+                try:
+                    length = int(self.headers.get("Content-Length", 0) or 0)
+                    payload = json.loads(self.rfile.read(length).decode("utf-8", "ignore") or "{}")
+                except Exception:
+                    payload = {}
+                result = event_log_service.record(message=payload.get("message", ""), level=payload.get("level", "info"), source=payload.get("source", "ui"), language=payload.get("language", "")) if event_log_service else {"ok": False}
+                result = {"ok": True, "event": result} if isinstance(result, dict) and result.get("id") else result
+            self._send_bytes(json.dumps(result).encode(), "application/json", 200 if result.get("ok") else 400)
+
+        def _cache(self):
+            if self.command == "GET":
+                result = cache_service.status() if cache_service else {"ok": False}
+            else:
+                try:
+                    length = int(self.headers.get("Content-Length", 0) or 0)
+                    payload = json.loads(self.rfile.read(length).decode("utf-8", "ignore") or "{}")
+                except Exception:
+                    payload = {}
+                result = cache_service.clear(payload.get("name")) if cache_service else {"ok": False}
+            self._send_bytes(json.dumps(result).encode(), "application/json", 200 if result.get("ok") else 400)
+
+        def _diagnostics(self):
+            result = diagnostics_service.status() if diagnostics_service else {"ok": False}
+            self._send_bytes(json.dumps(result).encode(), "application/json", 200 if result.get("ok") else 503)
+
+        def _updates(self):
+            result = update_service.status() if update_service else {"ok": False}
+            self._send_bytes(json.dumps(result).encode(), "application/json", 200 if result.get("ok") else 503)
+
+        def _game_meta(self):
+            query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            appids = [value for value in ((query.get("appids") or [""])[0]).split(",") if value.strip()]
+            language = (query.get("lang") or ["english"])[0]
+            steam_id = (query.get("steamid") or [""])[0]
+            result = steam_metadata_service.metadata(appids, steam_id, language) if steam_metadata_service else {"ok": False, "items": {}}
+            self._send_bytes(json.dumps(result).encode(), "application/json", 200 if result.get("ok") else 503)
+
+        def _steam_cover(self):
+            appid = self.path.split("?", 1)[0].rsplit("/", 1)[-1]
+            path, mime = steam_metadata_service.cover(appid) if steam_metadata_service else (None, "")
+            if not path:
+                self.send_error(404)
                 return
-            ok = True
-            for key, value in patch.items():
-                if key == "autostart":
-                    ok = bool(set_autostart_enabled(bool(value))) and ok
-                elif key in ("minimize_to_tray", "economy_mode", "auto_hour_farm_after_cards", "start_hour_farm_on_launch", "launch_minimized"):
-                    set_app_setting(key, bool(value))
-                elif key == "language" and value in ("ru", "en", "uk"):
-                    set_app_setting(key, value)
-                elif key == "hour_farm_priority_mode" and value in ("hours_asc", "hours_desc", "popular"):
-                    set_app_setting(key, value)
-                elif key == "theme" and value in ("dark", "light"):
-                    save_theme(value)
-                elif key == "priority_hour_farm_appids":
-                    raw = str(value or "")
-                    # Keep only digits and common separators; UI normalizes the value too.
-                    cleaned = "".join(ch if (ch.isdigit() or ch in ",; \n\t") else " " for ch in raw)
-                    set_app_setting(key, cleaned.strip())
-                elif key == "hour_farm_max_games_by_bot":
-                    cleaned = {}
-                    if isinstance(value, dict):
-                        for bot_name, max_games in value.items():
-                            try:
-                                n = int(max_games)
-                            except Exception:
-                                n = 32
-                            cleaned[str(bot_name)] = max(1, min(32, n))
-                    set_app_setting(key, cleaned)
-                elif key == "steam_api_key":
-                    val = (value or "").strip()
-                    RUNTIME["steam_api_key"] = val
-                    save_api_key(val)
-                else:
-                    ok = False
-            self._send_bytes(json.dumps({"ok": ok}).encode(), "application/json")
+            self._send_bytes(path.read_bytes(), mime)
 
         def _games(self):
             from urllib.parse import urlparse, parse_qs
@@ -2173,8 +3228,18 @@ def make_handler(ui_path, asf_host, asf_port, inject, stats_provider=None, exit_
                 self._send_bytes(json.dumps(check_github_update()).encode(), "application/json")
             elif self.path.startswith("/__settings"):
                 self._settings()
-            elif self.path.startswith("/__custom_theme/image"):
-                self._custom_theme_image()
+            elif self.path.startswith("/__theme") or self.path == "/__custom_theme":
+                self._theme()
+            elif self.path.startswith("/__events"):
+                self._events()
+            elif self.path.startswith("/__cache"):
+                self._cache()
+            elif self.path.startswith("/__diagnostics"):
+                self._diagnostics()
+            elif self.path.startswith("/__updates/status"):
+                self._updates()
+            elif self.path.startswith("/__custom_theme/media") or self.path.startswith("/__custom_theme/image"):
+                self._custom_theme_media()
             elif self.path.startswith("/__custom_theme"):
                 self._custom_theme()
             elif self.path.startswith("/__appstats"):
@@ -2183,6 +3248,38 @@ def make_handler(ui_path, asf_host, asf_port, inject, stats_provider=None, exit_
                 except Exception as e:
                     info = {"error": str(e), "memoryKb": 0, "memoryBytes": 0}
                 self._send_bytes(json.dumps(info).encode(), "application/json")
+            elif self.path.startswith("/__botconfigs/"):
+                name = urllib.parse.unquote(self.path.split("/", 3)[2])
+                result = bot_config_service.form(name) if bot_config_service else {"ok": False, "message": "Bot config service is unavailable."}
+                self._send_bytes(json.dumps(result).encode(), "application/json", 200 if result.get("ok") else 404)
+            elif self.path.startswith("/__bots/") and self.path.endswith("/profile"):
+                name = urllib.parse.unquote(self.path.split("/", 3)[2])
+                result = bot_service.profile(name) if bot_service else {"ok": False, "message": "Bot service is unavailable."}
+                self._send_bytes(json.dumps(result).encode(), "application/json", 200 if result.get("ok") else 404)
+            elif self.path == "/__bots" or self.path.startswith("/__bots?"):
+                result = bot_service.bots() if bot_service else {"ok": False, "message": "Bot service is unavailable."}
+                self._send_bytes(json.dumps(result).encode(), "application/json", 200 if result.get("ok") else 503)
+            elif self.path.startswith("/__login_requests/status"):
+                try:
+                    query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                    since = int((query.get("since") or [0])[0])
+                except Exception:
+                    since = 0
+                result = login_request_service.status(since) if login_request_service else {"ok": False, "message": "Login request service is unavailable."}
+                self._send_bytes(json.dumps(result).encode(), "application/json", 200 if result.get("ok") else 503)
+            elif self.path.startswith("/__hourfarm/status"):
+                try:
+                    from urllib.parse import urlparse, parse_qs
+                    query = parse_qs(urlparse(self.path).query)
+                    since = int((query.get("since") or [0])[0])
+                except Exception:
+                    since = 0
+                result = hour_farm_service.status(since) if hour_farm_service else {"ok": False, "message": "Hour farm service is unavailable."}
+                self._send_bytes(json.dumps(result).encode(), "application/json", 200 if result.get("ok") else 503)
+            elif self.path.startswith("/__steam/cover/"):
+                self._steam_cover()
+            elif self.path.startswith("/__game_meta"):
+                self._game_meta()
             elif self.path.startswith("/__games"):
                 self._games()
             elif self.path.startswith("/__popular_games"):
@@ -2201,8 +3298,57 @@ def make_handler(ui_path, asf_host, asf_port, inject, stats_provider=None, exit_
         def do_POST(self):
             if self.path.startswith("/__settings"):
                 self._settings()
-            elif self.path.startswith("/__custom_theme"):
-                self._custom_theme()
+            elif self.path.startswith("/__theme") or self.path == "/__custom_theme":
+                self._theme()
+            elif self.path.startswith("/__events/clear"):
+                result = event_log_service.clear() if event_log_service else {"ok": False}
+                self._send_bytes(json.dumps(result).encode(), "application/json", 200 if result.get("ok") else 503)
+            elif self.path.startswith("/__events"):
+                self._events()
+            elif self.path.startswith("/__cache"):
+                self._cache()
+            elif self.path == "/__botconfigs":
+                try:
+                    length = int(self.headers.get("Content-Length", 0) or 0)
+                    payload = json.loads(self.rfile.read(length).decode("utf-8", "ignore") or "{}")
+                except Exception:
+                    payload = {}
+                result = bot_config_service.save(payload.get("fields")) if bot_config_service else {"ok": False, "message": "Bot config service is unavailable."}
+                self._send_bytes(json.dumps(result).encode(), "application/json", 200 if result.get("ok") else 400)
+            elif self.path.startswith("/__bots/") and self.path.endswith("/action"):
+                try:
+                    length = int(self.headers.get("Content-Length", 0) or 0)
+                    payload = json.loads(self.rfile.read(length).decode("utf-8", "ignore") or "{}")
+                except Exception:
+                    payload = {}
+                name = urllib.parse.unquote(self.path.split("/", 3)[2])
+                result = bot_service.action(name, str(payload.get("action") or "")) if bot_service else {"ok": False, "message": "Bot service is unavailable."}
+                self._send_bytes(json.dumps(result).encode(), "application/json", 200 if result.get("ok") else 400)
+            elif self.path.startswith("/__login_requests/defer"):
+                try:
+                    length = int(self.headers.get("Content-Length", 0) or 0)
+                    payload = json.loads(self.rfile.read(length).decode("utf-8", "ignore") or "{}")
+                except Exception:
+                    payload = {}
+                result = login_request_service.defer(payload.get("keys")) if login_request_service else {"ok": False, "message": "Login request service is unavailable."}
+                self._send_bytes(json.dumps(result).encode(), "application/json", 200 if result.get("ok") else 503)
+            elif self.path.startswith("/__login_requests/input"):
+                try:
+                    length = int(self.headers.get("Content-Length", 0) or 0)
+                    payload = json.loads(self.rfile.read(length).decode("utf-8", "ignore") or "{}")
+                    result = login_request_service.submit(payload.get("bot"), payload.get("type"), payload.get("value")) if login_request_service else {"ok": False, "message": "Login request service is unavailable."}
+                except Exception as exc:
+                    result = {"ok": False, "message": str(exc)}
+                self._send_bytes(json.dumps(result).encode(), "application/json", 200 if result.get("ok") else 400)
+            elif self.path.startswith("/__hourfarm/start"):
+                try:
+                    length = int(self.headers.get("Content-Length", 0) or 0)
+                    payload = json.loads(self.rfile.read(length).decode("utf-8", "ignore") or "{}")
+                except Exception:
+                    payload = {}
+                targets = payload.get("targets") if isinstance(payload.get("targets"), list) else None
+                result = hour_farm_service.start_hour_farm(targets, "manual") if hour_farm_service else {"ok": False, "message": "Hour farm service is unavailable."}
+                self._send_bytes(json.dumps(result).encode(), "application/json", 200 if result.get("ok") else 503)
             elif self.path.startswith("/__install_update"):
                 result = install_github_update(exit_callback)
                 self._send_bytes(json.dumps(result).encode(), "application/json", 200 if result.get("ok") else 500)
@@ -2235,7 +3381,15 @@ def make_handler(ui_path, asf_host, asf_port, inject, stats_provider=None, exit_
             self._proxy("PUT") if self.path.startswith("/Api/") else self.send_error(404)
 
         def do_DELETE(self):
-            self._proxy("DELETE") if self.path.startswith("/Api/") else self.send_error(404)
+            if self.path.startswith("/__botconfigs/"):
+                name = urllib.parse.unquote(self.path.split("/", 3)[2])
+                try:
+                    result = bot_config_service.delete(name) if bot_config_service else {"ok": False, "message": "Bot config service is unavailable."}
+                except Exception as exc:
+                    result = {"ok": False, "message": str(exc)}
+                self._send_bytes(json.dumps(result).encode(), "application/json", 200 if result.get("ok") else 400)
+            else:
+                self._proxy("DELETE") if self.path.startswith("/Api/") else self.send_error(404)
 
     return Handler
 
@@ -2245,8 +3399,8 @@ class ThreadingServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     allow_reuse_address = True
 
 
-def start_local_server(ui_path, asf_host, asf_port, inject, want_port=0, stats_provider=None, exit_callback=None, plugin_manager=None):
-    handler = make_handler(ui_path, asf_host, asf_port, inject, stats_provider, exit_callback, plugin_manager)
+def start_local_server(ui_path, asf_host, asf_port, inject, want_port=0, stats_provider=None, exit_callback=None, plugin_manager=None, hour_farm_service=None, bot_service=None, login_request_service=None, bot_config_service=None, steam_metadata_service=None, settings_service=None, theme_service=None, event_log_service=None, cache_service=None, diagnostics_service=None, update_service=None):
+    handler = make_handler(ui_path, asf_host, asf_port, inject, stats_provider, exit_callback, plugin_manager, hour_farm_service, bot_service, login_request_service, bot_config_service, steam_metadata_service, settings_service, theme_service, event_log_service, cache_service, diagnostics_service, update_service)
     httpd = ThreadingServer(("127.0.0.1", want_port), handler)
     port = httpd.server_address[1]
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
@@ -2282,23 +3436,19 @@ def _which_program(name):
 
 
 def _trim_process_working_set(pid):
-    """Сбрасывает неиспользуемые resident pages процесса. Это снижает Working Set в Диспетчере задач."""
     if os.name != "nt":
         return False
     try:
         import ctypes
         from ctypes import wintypes
+
         pid = int(pid)
-        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-        PROCESS_SET_QUOTA = 0x0100
         kernel32 = ctypes.windll.kernel32
         psapi = ctypes.windll.psapi
-        kernel32.OpenProcess.restype = wintypes.HANDLE
-        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SET_QUOTA, False, pid)
+        handle = kernel32.OpenProcess(0x1000 | 0x0100, False, pid)
         if not handle:
             return False
         try:
-            # EmptyWorkingSet is softer and safer than SetProcessWorkingSetSize(-1, -1).
             psapi.EmptyWorkingSet.restype = wintypes.BOOL
             return bool(psapi.EmptyWorkingSet(handle))
         finally:
@@ -2358,12 +3508,7 @@ def start_memory_trim_thread(cfg, asf_holder):
 
 
 def configure_webview2_low_memory(cfg):
-    """Настраивает Edge WebView2 через WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS.
 
-    Режим рассчитан на тест памяти: single-process + отключение фоновых сервисов.
-    GPU по умолчанию НЕ отключаем, потому что на системе пользователя это уже давало серое окно.
-    Если нужно проверить совсем жёстко — webview_disable_gpu=true в config.ini.
-    """
     enabled = str(cfg.get("webview_low_memory", "true")).lower() in ("1", "true", "yes", "on")
     if os.name != "nt" or not enabled:
         os.environ.pop("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", None)
@@ -2383,7 +3528,7 @@ def configure_webview2_low_memory(cfg):
     in_process_gpu = str(cfg.get("webview_in_process_gpu", "false")).lower() in ("1", "true", "yes", "on")
 
     flags = [
-        # Edge background services/networking not needed by the local UI
+
         "--disable-background-networking",
         "--disable-sync",
         "--disable-extensions",
@@ -2398,7 +3543,7 @@ def configure_webview2_low_memory(cfg):
         "--no-default-browser-check",
         "--no-service-autorun",
 
-        # Unused subsystems
+
         "--disable-print-preview",
         "--disable-speech-api",
         "--disable-notifications",
@@ -2407,18 +3552,18 @@ def configure_webview2_low_memory(cfg):
         "--disable-logging",
         "--log-level=3",
 
-        # Cache/profile: reduce disk and media cache
+
         "--disk-cache-size=1",
         "--media-cache-size=1",
 
-        # Limit UI JS heap so leaks/DOM growth cannot expand indefinitely
+
         "--js-flags=--max-old-space-size=96",
     ]
 
     if single_process:
         flags += [
-            # Requested WebView2 single-process mode. Chromium/WebView2 can partially ignore
-            # this flag in newer runtimes, but when allowed the renderer moves into the browser process.
+
+
             "--single-process",
             "--renderer-process-limit=1",
             "--process-per-site",
@@ -2426,8 +3571,8 @@ def configure_webview2_low_memory(cfg):
 
     if aggressive:
         flags += [
-            # Reduce isolated renderer process count and extra services.
-            # This is less safe for a normal browser, but BetterASF UI is local: 127.0.0.1.
+
+
             "--disable-site-isolation-trials",
             "--disable-web-security",
             "--disable-features=IsolateOrigins,site-per-process,CalculateNativeWinOcclusion,BackForwardCache,AcceptCHFrame,AutofillServerCommunication,OptimizationHints,MediaRouter,InterestFeedContentSuggestions,msSmartScreenProtection",
@@ -2439,14 +3584,14 @@ def configure_webview2_low_memory(cfg):
 
     if in_process_gpu and not disable_gpu:
         flags += [
-            # Try to remove the separate GPU process while keeping hardware acceleration.
-            # May be unstable on some drivers, therefore exposed in config.ini.
+
+
             "--in-process-gpu",
         ]
 
     if disable_gpu:
         flags += [
-            # The riskiest block. It can reduce GPU memory, but may cause a gray window on some systems.
+
             "--disable-gpu",
             "--disable-gpu-compositing",
             "--disable-accelerated-video-decode",
@@ -2458,7 +3603,7 @@ def configure_webview2_low_memory(cfg):
     if extra:
         flags.extend(extra.split())
 
-    # Remove duplicates while preserving order.
+
     value = " ".join(dict.fromkeys(flags))
     os.environ["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = value
     log(
@@ -2469,37 +3614,28 @@ def configure_webview2_low_memory(cfg):
 
 
 def launch_browser_app(url, configured=""):
-    """Открывает UI во внешнем браузере в app-режиме без WebView2 внутри BetterASF."""
     profile = DATA_DIR / "BrowserProfile"
     profile.mkdir(parents=True, exist_ok=True)
-    for cand in _browser_candidates(configured):
-        exe = None
-        if cand.exists():
-            exe = str(cand)
-        else:
-            exe = _which_program(str(cand))
-        if not exe:
+    for candidate in _browser_candidates(configured):
+        executable = str(candidate) if candidate.exists() else _which_program(str(candidate))
+        if not executable:
             continue
-        name = Path(exe).name.lower()
         try:
-            if "firefox" in name:
-                cmd = [exe, "--new-window", url]
+            if "firefox" in Path(executable).name.lower():
+                command = [executable, "--new-window", url]
             else:
-                cmd = [
-                    exe, f"--app={url}", f"--user-data-dir={profile}",
+                command = [
+                    executable, f"--app={url}", f"--user-data-dir={profile}",
                     "--no-first-run", "--no-default-browser-check", "--disable-extensions",
                 ]
-            log(f"Запуск внешнего интерфейса: {' '.join(cmd)}")
-            return subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except Exception as e:
-            log(f"Не удалось запустить браузер {exe}: {e}")
-            continue
+            return subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as exc:
+            log(f"Не удалось запустить браузер {executable}: {exc}")
     try:
         import webbrowser
-        log("Не найден Edge/Chrome, открываю системный браузер обычным способом.")
         webbrowser.open(url)
-    except Exception as e:
-        log(f"Не удалось открыть браузер: {e}")
+    except Exception as exc:
+        log(f"Не удалось открыть браузер: {exc}")
     return None
 
 
@@ -2553,7 +3689,7 @@ class Bridge:
                 except Exception as e:
                     log(f"Tray: не удалось загрузить иконку {icon_path}: {e}")
             if img is None:
-                # Fallback only when the icon file is missing.
+
                 img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
                 d = ImageDraw.Draw(img)
                 d.rounded_rectangle((8, 8, 56, 56), radius=14, fill=(111, 123, 255, 255))
@@ -2703,8 +3839,8 @@ def monitor_ipc(host, port, timeout, asf_holder):
             if dead_since is None:
                 dead_since = time.time()
                 log("ASF завершился до поднятия IPC. Жду несколько секунд: возможно, это штатный рестарт после самообновления.")
-            # If ASF starts a new process after update, IPC will appear without our intervention.
-            # Only if the port is still unavailable after 8 seconds, start ASF again manually.
+
+
             if (time.time() - dead_since) >= 8:
                 if restarts < 2:
                     restarts += 1
@@ -2776,10 +3912,10 @@ def main():
                 except Exception:
                     pass
                 asf_holder["proc"] = None
-            # Never erase a self-updated ASF runtime automatically. New ASF versions
-            # deliberately replace their own files and can take time to relaunch.
-            # A destructive reset here was the reason a successful update could be
-            # overwritten by the bundled, older runtime.
+
+
+
+
 
             exe = None
             try:
@@ -2827,7 +3963,7 @@ def main():
         return False
 
     def run_plugin_maintenance(operation):
-        """Apply a plugin change while ASF is stopped, then start it once again."""
+
         with start_lock:
             plugin_operation.set()
             set_asf_status("recovering", "Applying plugin changes and restarting ASF...")
@@ -2863,8 +3999,8 @@ def main():
                 start_asf_process(False, "missing_process")
                 wait_for_asf_ipc(timeout)
             elif not proc.alive():
-                # ASF exits its old PID during a self-update, then starts a new PID.
-                # The update may need substantially longer than 8 seconds on slow disks.
+
+
                 set_asf_status("recovering", "Waiting for ASF self-update restart...")
                 log(f"ASF launcher PID exited. Waiting up to {self_restart_grace}s for its self-update successor; runtime will be preserved.")
                 successor_ready = False
@@ -2879,7 +4015,7 @@ def main():
                         break
                     time.sleep(1.0)
                 if not successor_ready:
-                    # Try the currently updated runtime once, without deleting it.
+
                     set_asf_status("recovering", "ASF did not restart itself. Trying the current runtime without reset...")
                     log("ASF successor did not open IPC. Restarting the current runtime without deleting ASF-runtime.")
                     start_asf_process(False, "after_self_update")
@@ -2889,8 +4025,8 @@ def main():
                     if RUNTIME.get("asf_status") != "online":
                         set_asf_status("online", "ASF IPC is available.")
                 elif proc.replaced_by_self_update:
-                    # We only assume the new PID is alive while its IPC endpoint is
-                    # alive. Once it disappears, return to normal failure handling.
+
+
                     proc.replaced_by_self_update = False
                     set_asf_status("recovering", "ASF self-update successor lost IPC. Checking restart...")
                 elif RUNTIME.get("asf_status") == "online":
@@ -2905,8 +4041,11 @@ def main():
         supervisor_started["done"] = True
         log("ASF supervisor: starting after UI initialization.")
         threading.Thread(target=asf_supervisor, daemon=True).start()
+        hour_farm_service.start()
+        login_request_service.start()
 
     RUNTIME["steam_api_key"] = cfg.get("steam_api_key", "")
+    RUNTIME["ipc_password"] = cfg.get("ipc_password", "")
     inject = {
         "apiBase": "",
         "ipcPort": port,
@@ -2932,6 +4071,19 @@ def main():
         return str(Path(existing).parent) if existing else None
 
     plugin_manager = ASFPluginManager(plugin_runtime_dir, run_plugin_maintenance)
+    settings_service = SettingsService()
+    theme_service = ThemeService()
+    event_log_service = EventLogService()
+    global _EVENT_LOG_SERVICE
+    _EVENT_LOG_SERVICE = event_log_service
+    steam_metadata_service = SteamMetadataService(lambda: RUNTIME.get("steam_api_key") or _load_settings().get("steam_api_key", ""))
+    bot_service = BotService(host, port, lambda: RUNTIME.get("ipc_password") or cfg.get("ipc_password", ""))
+    bot_config_service = BotConfigService(bot_service)
+    login_request_service = LoginRequestService(bot_service, exit_event)
+    hour_farm_service = HourFarmService(host, port, lambda: RUNTIME.get("ipc_password") or cfg.get("ipc_password", ""), exit_event, steam_metadata_service)
+    cache_service = CacheService(steam_metadata_service, event_log_service)
+    diagnostics_service = DiagnosticsService(bot_service, hour_farm_service, login_request_service, cache_service)
+    update_service = UpdateService(bot_service)
 
     try:
         httpd, ui_port = start_local_server(
@@ -2943,6 +4095,17 @@ def main():
             ),
             exit_callback=lambda: exit_event.set(),
             plugin_manager=plugin_manager,
+            hour_farm_service=hour_farm_service,
+            bot_service=bot_service,
+            login_request_service=login_request_service,
+            bot_config_service=bot_config_service,
+            steam_metadata_service=steam_metadata_service,
+            settings_service=settings_service,
+            theme_service=theme_service,
+            event_log_service=event_log_service,
+            cache_service=cache_service,
+            diagnostics_service=diagnostics_service,
+            update_service=update_service,
         )
     except Exception as e:
         log(f"Не удалось запустить локальный сервер: {e}")
@@ -2964,6 +4127,8 @@ def main():
             return
         _stopped["done"] = True
         exit_event.set()
+        hour_farm_service.stop()
+        login_request_service.stop()
         RUNTIME["asf_status"] = "stopping"
         RUNTIME["asf_status_message"] = "BetterASF is shutting down."
         log("Завершение работы...")

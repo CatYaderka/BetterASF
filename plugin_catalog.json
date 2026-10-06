@@ -1,36 +1,34 @@
 {
-  "schema": 1,
+  "schema": 2,
   "plugins": [
     {
       "id": "official-monitoring",
       "name": "Monitoring",
       "repository": "JustArchiNET/ArchiSteamFarm",
       "asset_prefix": "ArchiSteamFarm.OfficialPlugins.Monitoring",
-      "description": "Official ASF plugin that exports monitoring metrics."
-    },
-    {
-      "id": "freepackages",
-      "name": "FreePackages",
-      "repository": "Citrinate/FreePackages",
-      "description": "Finds and redeems free Steam packages."
-    },
-    {
-      "id": "boostermanager",
-      "name": "BoosterManager",
-      "repository": "Citrinate/BoosterManager",
-      "description": "Creates Steam booster packs and manages card items."
-    },
-    {
-      "id": "cs2interface",
-      "name": "CS2Interface",
-      "repository": "Citrinate/CS2Interface",
-      "description": "Adds Counter-Strike 2 integrations to ASF."
+      "description": "Official ASF plugin that exports monitoring metrics.",
+      "betterasf_compatible": true
     },
     {
       "id": "commandlessredeem",
       "name": "CommandlessRedeem",
       "repository": "CatPoweredPlugins/CommandlessRedeem",
-      "description": "Adds commandless Steam key redemption."
+      "description": "Redeems keys received through Steam chat without the standard redeem command.",
+      "betterasf_compatible": true
+    },
+    {
+      "id": "asf-achievement-manager",
+      "name": "ASFAchievementManager",
+      "repository": "CatPoweredPlugins/ASFAchievementManager",
+      "description": "Manages Steam achievements through ASF commands.",
+      "betterasf_compatible": true
+    },
+    {
+      "id": "asf-enhance",
+      "name": "ASFEnhance",
+      "repository": "chr233/ASFEnhance",
+      "description": "Extends ASF with additional commands and features.",
+      "betterasf_compatible": true
     }
   ]
 }

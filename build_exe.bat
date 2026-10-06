@@ -3,14 +3,6 @@ setlocal enabledelayedexpansion
 title Build ASF Desktop (single exe, ASF embedded)
 cd /d "%~dp0"
 
-REM ===============================================================
-REM  Builds a single BetterASF.exe (no console).
-REM  If folder "_asf" exists, the full ASF is EMBEDDED into the exe
-REM  and unpacked next to it (ASF-runtime\) on first run, while your
-REM  accounts stay in a separate "config\" folder beside the exe.
-REM  Run this ON WINDOWS.
-REM ===============================================================
-
 where python >nul 2>nul
 if errorlevel 1 goto NOPYTHON
 
@@ -18,8 +10,6 @@ echo [1/4] Installing dependencies...
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt pyinstaller pillow
 if errorlevel 1 goto FAILDEPS
-
-REM ---- Prepare embedded ASF ----
 if exist "_asf\ArchiSteamFarm.exe" goto HAVEASF
 echo.
 echo [i] Folder "_asf" with ArchiSteamFarm.exe was NOT found.
@@ -42,7 +32,6 @@ if "!ASFVER!"=="" set ASFVER=1
 > "_asf\_asf_version.txt" echo !ASFVER!
 
 :BUILD
-REM Make icon.ico from png if needed.
 if exist "icon.ico" goto HAVEICON
 if not exist "icon_source.png" goto HAVEICON
 python -c "from PIL import Image; Image.open('icon_source.png').convert('RGBA').save('icon.ico', sizes=[(256,256),(128,128),(64,64),(48,48),(32,32),(16,16)])"

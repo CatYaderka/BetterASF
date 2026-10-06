@@ -1,27 +1,27 @@
-# -*- mode: python ; coding: utf-8 -*-
-# PyInstaller spec for BetterASF (onefile, no console).
-# UI assets and config.ini are bundled into the executable.
-# Build on Windows: pyinstaller asf_desktop.spec
+
+
+
+
 
 import os
 from PyInstaller.utils.hooks import collect_all
 
 block_cipher = None
 
-# pywebview + edgechromium backend (WebView2) require extra data files.
+
 datas = [
     ('ui', 'ui'),
     ('config.ini', '.'),
 ]
-# Keep the catalogue beside the bundled config so it remains an offline fallback.
+
 if os.path.exists('plugin_catalog.json'):
     datas.append(('plugin_catalog.json', '.'))
 if os.path.exists('icon.ico'):
     datas.append(('icon.ico', '.'))
 if os.path.exists('icon_source.png'):
     datas.append(('icon_source.png', '.'))
-# Embedded ASF: if the _asf folder exists, it is bundled into the executable
-# and extracted to ASF-runtime on first launch.
+
+
 if os.path.isdir('_asf'):
     datas.append(('_asf', '_asf'))
     print('[spec] Embedded ASF will be bundled (_asf folder found).')
@@ -31,12 +31,12 @@ binaries = []
 hiddenimports = [
     'webview',
     'webview.platforms.edgechromium',
-    'clr',          # pythonnet
-    'pystray',      # tray icon
+    'clr',
+    'pystray',
     'PIL', 'PIL.Image', 'PIL.ImageDraw',
 ]
 
-# Collect everything required by pywebview (backends and DLLs).
+
 for pkg in ('webview', 'pystray', 'PIL'):
     d, b, h = collect_all(pkg)
     datas += d
@@ -77,7 +77,7 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,          # no console window
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

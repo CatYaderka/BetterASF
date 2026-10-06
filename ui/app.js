@@ -12,7 +12,7 @@ const I18N = {
     dashboard_title: 'Главная', bots_title: 'Боты', commands_title: 'Команды', plugins_title: 'Плагины', log_title: 'Журнал', settings_title: 'Настройки',
     refresh: 'Обновить', execute: 'Выполнить', clear: 'Очистить', save: 'Сохранить', cancel: 'Отмена', remove: 'Удалить', install: 'Установить', installing: 'Установка…', removing: 'Удаление…',
     appearance_title: 'Оформление и темы', behavior_title: 'Поведение приложения', priority_games: 'Приоритетные игры для фарма часов', language_label: 'Язык интерфейса',
-    theme_choose: 'Выбрать тему из списка:', custom_theme: 'Своя тема', custom_theme_add: 'Создать свою тему', custom_theme_title: 'Своя тема', custom_theme_sub: 'Выберите светлую или тёмную основу, загрузите своё изображение и при необходимости сделайте элементы прозрачными.', custom_theme_base: 'Основа темы', custom_theme_dark: 'Тёмная', custom_theme_light: 'Светлая', custom_theme_image: 'Своя картинка', custom_theme_image_hint: 'PNG, JPG или WebP, до 12 МБ. Если файл не выбрать, сохранится текущая картинка.', custom_theme_transparent: 'Включить прозрачность элементов', custom_theme_remove_image: 'Убрать картинку', custom_theme_saved: 'Своя тема сохранена', custom_theme_error: 'Не удалось сохранить свою тему', custom_theme_image_too_large: 'Картинка должна быть не больше 12 МБ', custom_theme_image_invalid: 'Выберите PNG, JPG или WebP', custom_theme_image_loaded: 'Картинка выбрана',
+    custom_theme: 'Кастомная тема', custom_theme_title: 'Кастомная тема', custom_theme_sub: 'Выберите светлую или тёмную основу, загрузите своё изображение и при необходимости сделайте элементы прозрачными.', custom_theme_base: 'Основа темы', custom_theme_dark: 'Тёмная', custom_theme_light: 'Светлая', custom_theme_image: 'Свой медиафон', custom_theme_image_hint: 'PNG, JPG, WebP, GIF, MP4 или WebM. Изображение до 12 МБ, видео до 50 МБ.', custom_theme_transparent: 'Включить прозрачность элементов', custom_theme_remove_image: 'Убрать картинку', custom_theme_saved: 'Своя тема сохранена', custom_theme_error: 'Не удалось сохранить свою тему', custom_theme_image_too_large: 'Изображение до 12 МБ, видео до 50 МБ', custom_theme_image_invalid: 'Выберите PNG, JPG, WebP, GIF, MP4 или WebM', custom_theme_image_loaded: 'Медиафон выбран',
     kpi_games: 'Игр осталось', kpi_time: 'Времени осталось', kpi_cards: 'Карт осталось', dashboard_refresh: 'Обновить', commands_hint: 'Подсказки:', command_placeholder: 'Введите команду, напр. status ASF', command_output: 'Вывод команды появится здесь…',
     appearance_sub: 'Выберите цветовую схему и фоновое изображение для интерфейса BetterASF.', behavior_sub: 'Настройки самого BetterASF. Они сохраняются в Documents\BetterASF\settings.json.',
     tray_title: 'Сворачивание в трей', tray_sub: 'Кнопка закрытия будет сворачивать BetterASF, не завершая ASF.', minimized_title: 'Запуск в минимизированном состоянии', minimized_sub: 'После открытия BetterASF сразу свернётся; если включён трей — спрячется в трей.', autostart_title: 'Запуск вместе с системой', autostart_sub: 'Добавляет BetterASF в автозагрузку текущего пользователя Windows.', economy_title: 'Экономичный режим интерфейса', economy_sub: 'Отключает фоновые картинки, blur/тяжёлые тени, аватарки и реже обновляет данные.',
@@ -20,11 +20,11 @@ const I18N = {
     plugins_library: 'Библиотека', plugins_store: 'Магазин плагинов', plugins_library_note: 'Установленные плагины ASF. После изменения ASF перезапускается автоматически.', plugins_store_note: 'Каталог и ZIP-релизы проверяются напрямую на GitHub. Устанавливайте только плагины, которым доверяете.',
     plugin_remove_title: 'Удалить плагин?', plugin_remove_text: 'Плагин будет удалён из ASF:', plugin_remove_restart: 'ASF будет автоматически перезапущен. Это действие нельзя отменить.',
     plugin_empty: 'Установленных плагинов нет.', plugin_loaded: 'Загружен ASF', plugin_not_loaded: 'Ожидает перезапуска', plugin_unknown: 'Плагин', plugin_store_loading: 'Загрузка каталога GitHub…', plugin_library_loading: 'Загрузка библиотеки…', plugin_files: 'DLL-файлов', plugin_size: 'Размер', plugin_source: 'Источник', plugin_version: 'Версия', plugin_author: 'Автор', plugin_unavailable: 'В GitHub нет ZIP-релиза', plugin_restart: 'ASF перезапускается для применения изменения.',
-    hour_priority_mode: 'Режим приоритетного фарма часов', experimental: 'Экспериментальная функция', hours_asc: 'По возрастанию часов', hours_desc: 'По убыванию часов', hours_popular: 'Популярные — списки из топа по онлайну', hour_priority_mode_hint: 'В режиме «Популярные» BetterASF берёт актуальный топ Steam по онлайну и выдаёт следующим аккаунтам разные списки игр.',
+    hour_priority_mode: 'Режим приоритетного фарма часов', experimental: 'Экспериментальная функция', hours_asc: 'По возрастанию часов', hours_desc: 'По убыванию часов', hours_popular: 'Популярные — списки из топа по онлайну', hour_priority_mode_hint: 'В режиме «Популярные» BetterASF берёт актуальный топ Steam по онлайну и выдаёт следующим аккаунтам разные списки игр.', hour_cards_take_over: 'Для {bot} найдены игры с карточками: возвращаю ASF к фарму карточек.', hour_cards_switched: 'Фарм часов остановлен: карточки появились на {count} акк.', hour_cards_reset_failed: 'Не удалось переключить {bot} на фарм карточек', hour_service_started: '{bot}: запущено {count} игр для фарма часов', hour_service_no_targets: 'Нет аккаунтов, готовых к фарму часов', hour_service_no_games: 'Подходящие игры не найдены', hour_service_need_api_key: 'Нужен Steam Web API ключ для фарма часов', hour_service_cards_take_over: '{bot}: карточки получили приоритет над фармом часов', hour_service_reset_error: 'Не удалось вернуть {bot} к фарму карточек', hour_service_games_error: '{bot}: ошибка получения библиотеки игр', hour_service_private_games: '{bot}: библиотека игр недоступна', hour_service_play_error: '{bot}: не удалось запустить игры', hour_service_asf_unavailable: 'ASF недоступен для фарма часов', hour_service_poll_error: 'Ошибка фоновой проверки фарма часов',
     setting_saved: 'Настройка сохранена', settings_error: 'Не удалось применить настройку', language_saved: 'Язык интерфейса изменён', priority_mode_saved: 'Режим приоритетного фарма сохранён',
-    bot_disabled: 'Отключён', bot_offline: 'Не в сети', bot_paused: 'Пауза', bot_farming: 'Фармит', bot_online: 'В сети', bot_settings: 'Настройки бота', start_bot: 'Запустить бота', stop_bot: 'Остановить бота', resume_farm: 'Продолжить фарм', pause_farm: 'Пауза фарма', new_bot: 'Новый бот', save_bot: 'Сохранить', create_bot: 'Создать', keep_password: '(оставьте пустым, чтобы не менять)',
+    bot_disabled: 'Отключён', bot_offline: 'Не в сети', bot_paused: 'Пауза', bot_farming: 'Фармит', bot_online: 'В сети', bot_settings: 'Настройки бота', start_bot: 'Запустить бота', stop_bot: 'Остановить бота', resume_farm: 'Продолжить фарм', pause_farm: 'Пауза фарма', new_bot: 'Новый бот', save_bot: 'Сохранить', create_bot: 'Создать', keep_password: '(оставьте пустым, чтобы не менять)', bot_details: 'Профиль бота', bot_actions: 'Действия', bot_enable: 'Включить', bot_disable: 'Отключить', bot_games: 'Запущенные игры', bot_no_games: 'Сейчас игры не запущены', bot_game_loading: 'Загрузка игры…', bot_game_unknown: 'Игра недоступна', bot_enabled: 'Бот включён', bot_disabled_message: 'Бот отключён', bot_control_error: 'Не удалось выполнить действие для бота', bots_empty: 'Боты не найдены. Добавьте бота в ASF.', bots_not_found: 'Поиск не дал результатов', sidebar_expand: 'Развернуть меню', service_data: 'Данные и диагностика', diagnostics: 'Диагностика', clear_covers: 'Очистить обложки', clear_names: 'Очистить названия', clear_history: 'Очистить историю', updates_status: 'Статус обновлений', cache_cleared: 'Кэш очищен', bots_search: 'Поиск бота', bot_online_time: 'В сети', bot_running_time: 'Работает',
     plugins_failed: 'Не удалось получить плагины', plugin_store_failed: 'Не удалось загрузить каталог GitHub', plugin_installed: 'Плагин установлен', plugin_removed: 'Плагин удалён',
-    input_login_title: 'Логин Steam', input_login_label: 'логин', input_login_placeholder: 'Steam логин', input_password_title: 'Пароль Steam', input_password_label: 'пароль', input_password_placeholder: 'Пароль', input_guard_title: 'Steam Guard', input_guard_label: 'код Steam Guard (из e-mail)', input_parental_title: 'Родительский код', input_parental_label: 'родительский код Steam', input_parental_placeholder: 'Код', input_2fa_title: 'Двухфакторный код (2FA)', input_2fa_label: 'код аутентификатора', input_confirm_title: 'Подтверждение входа', input_confirm_label: 'подтверждение', input_request_for: 'Запрос на вход для аккаунта:', input_enter_for: 'Введите {value} для аккаунта:', input_required_for: 'Вход не завершён для {bot}: требуется {value}', input_required: 'Требуется {value} для бота {bot}', input_value_required: 'Введите значение', input_sent: 'Отправлено для {bot}', input_later: 'Запрос входа отложен', input_alert: 'Есть запросы на вход. Нажмите, чтобы открыть.',
+    input_login_title: 'Логин Steam', input_login_label: 'логин', input_login_placeholder: 'Steam логин', input_password_title: 'Пароль Steam', input_password_label: 'пароль', input_password_placeholder: 'Пароль', input_guard_title: 'Steam Guard', input_guard_label: 'код Steam Guard (из e-mail)', input_parental_title: 'Родительский код', input_parental_label: 'родительский код Steam', input_parental_placeholder: 'Код', input_2fa_title: 'Двухфакторный код (2FA)', input_2fa_label: 'код аутентификатора', input_confirm_title: 'Подтверждение входа', input_confirm_label: 'подтверждение', input_request_for: 'Запрос на вход для аккаунта:', input_enter_for: 'Введите {value} для аккаунта:', input_required_for: 'Вход не завершён для {bot}: требуется {value}', input_required: 'Требуется {value} для бота {bot}', input_value_required: 'Введите значение', input_sent: 'Отправлено для {bot}', input_later: 'Запрос входа отложен', input_alert: 'Есть запросы на вход. Нажмите, чтобы открыть.', login_request_new: 'Требуется {value} для бота {bot}', login_request_resolved: 'Запрос входа завершён для {bot}', login_request_poll_error: 'Ошибка фоновой проверки запросов входа',
     popular_loading: 'получаю глобальный топ Steam по онлайну', popular_unavailable: 'Глобальный топ Steam недоступен; использую порядок по часам.', update_downloading: 'Загрузка…', update_started: 'Обновление запущено, BetterASF закроется', update_failed: 'Не удалось обновить', update_check_failed: 'Не удалось проверить обновления', update_none: 'Обновлений нет', update_available: 'Доступна новая версия BetterASF {version}', update_button: 'Обновить', asf_restart: 'Перезагрузка ASF', asf_update_check: 'Проверка обновления ASF',
   },
   en: {
@@ -34,7 +34,7 @@ const I18N = {
     dashboard_title: 'Dashboard', bots_title: 'Bots', commands_title: 'Commands', plugins_title: 'Plugins', log_title: 'Log', settings_title: 'Settings',
     refresh: 'Refresh', execute: 'Run', clear: 'Clear', save: 'Save', cancel: 'Cancel', remove: 'Remove', install: 'Install', installing: 'Installing…', removing: 'Removing…',
     appearance_title: 'Appearance and themes', behavior_title: 'Application behavior', priority_games: 'Priority games for hour farming', language_label: 'Interface language',
-    theme_choose: 'Choose a theme from the list:', custom_theme: 'Custom theme', custom_theme_add: 'Create custom theme', custom_theme_title: 'Custom theme', custom_theme_sub: 'Choose a light or dark base, upload your own image and optionally make interface elements transparent.', custom_theme_base: 'Theme base', custom_theme_dark: 'Dark', custom_theme_light: 'Light', custom_theme_image: 'Custom image', custom_theme_image_hint: 'PNG, JPG or WebP, up to 12 MB. If no file is selected, the current image is kept.', custom_theme_transparent: 'Enable transparent elements', custom_theme_remove_image: 'Remove image', custom_theme_saved: 'Custom theme saved', custom_theme_error: 'Could not save custom theme', custom_theme_image_too_large: 'Image must be 12 MB or smaller', custom_theme_image_invalid: 'Select a PNG, JPG or WebP image', custom_theme_image_loaded: 'Image selected',
+    custom_theme: 'Custom theme', custom_theme_title: 'Custom theme', custom_theme_sub: 'Choose a light or dark base, upload your own image and optionally make interface elements transparent.', custom_theme_base: 'Theme base', custom_theme_dark: 'Dark', custom_theme_light: 'Light', custom_theme_image: 'Custom media background', custom_theme_image_hint: 'PNG, JPG, WebP, GIF, MP4 or WebM. Images up to 12 MB, videos up to 50 MB.', custom_theme_transparent: 'Enable transparent elements', custom_theme_remove_image: 'Remove image', custom_theme_saved: 'Custom theme saved', custom_theme_error: 'Could not save custom theme', custom_theme_image_too_large: 'Images are limited to 12 MB and videos to 50 MB', custom_theme_image_invalid: 'Select PNG, JPG, WebP, GIF, MP4 or WebM', custom_theme_image_loaded: 'Media background selected',
     kpi_games: 'Games remaining', kpi_time: 'Time remaining', kpi_cards: 'Cards remaining', dashboard_refresh: 'Refresh', commands_hint: 'Hints:', command_placeholder: 'Enter a command, e.g. status ASF', command_output: 'Command output will appear here…',
     appearance_sub: 'Choose the colour scheme and background image for the BetterASF interface.', behavior_sub: 'BetterASF settings. They are saved in Documents\BetterASF\settings.json.',
     tray_title: 'Minimize to tray', tray_sub: 'The Close button minimizes BetterASF without closing ASF.', minimized_title: 'Start minimized', minimized_sub: 'BetterASF minimizes immediately after opening; if tray is enabled, it hides in the tray.', autostart_title: 'Start with Windows', autostart_sub: 'Adds BetterASF to the current Windows user’s startup.', economy_title: 'Economy interface mode', economy_sub: 'Disables background images, blur/heavy shadows and avatars, and refreshes data less often.',
@@ -42,11 +42,11 @@ const I18N = {
     plugins_library: 'Library', plugins_store: 'Plugin store', plugins_library_note: 'Installed ASF plugins. ASF restarts automatically after a change.', plugins_store_note: 'The catalogue and ZIP releases are checked directly on GitHub. Install only plugins you trust.',
     plugin_remove_title: 'Remove plugin?', plugin_remove_text: 'This plugin will be removed from ASF:', plugin_remove_restart: 'ASF will restart automatically. This action cannot be undone.',
     plugin_empty: 'No installed plugins.', plugin_loaded: 'Loaded by ASF', plugin_not_loaded: 'Waiting for restart', plugin_unknown: 'Plugin', plugin_store_loading: 'Loading GitHub catalogue…', plugin_library_loading: 'Loading library…', plugin_files: 'DLL files', plugin_size: 'Size', plugin_source: 'Source', plugin_version: 'Version', plugin_author: 'Author', plugin_unavailable: 'No ZIP release on GitHub', plugin_restart: 'ASF is restarting to apply the change.',
-    hour_priority_mode: 'Priority hour-farming mode', experimental: 'Experimental feature', hours_asc: 'Hours ascending', hours_desc: 'Hours descending', hours_popular: 'Popular — consecutive lists from online top', hour_priority_mode_hint: 'In Popular mode, BetterASF gets Steam’s current online leaderboard and gives subsequent accounts different game lists.',
+    hour_priority_mode: 'Priority hour-farming mode', experimental: 'Experimental feature', hours_asc: 'Hours ascending', hours_desc: 'Hours descending', hours_popular: 'Popular — consecutive lists from online top', hour_priority_mode_hint: 'In Popular mode, BetterASF gets Steam’s current online leaderboard and gives subsequent accounts different game lists.', hour_cards_take_over: 'Games with card drops were found for {bot}: returning ASF to card farming.', hour_cards_switched: 'Hour farming stopped: cards appeared on {count} account(s).', hour_cards_reset_failed: 'Could not switch {bot} back to card farming', hour_service_started: '{bot}: started {count} games for hour farming', hour_service_no_targets: 'No accounts are ready for hour farming', hour_service_no_games: 'No suitable games were found', hour_service_need_api_key: 'A Steam Web API key is required for hour farming', hour_service_cards_take_over: '{bot}: card farming took priority over hour farming', hour_service_reset_error: 'Could not return {bot} to card farming', hour_service_games_error: '{bot}: could not fetch the owned-games library', hour_service_private_games: '{bot}: games library is unavailable', hour_service_play_error: '{bot}: could not start games', hour_service_asf_unavailable: 'ASF is unavailable for hour farming', hour_service_poll_error: 'Background hour-farming check failed',
     setting_saved: 'Setting saved', settings_error: 'Could not apply setting', language_saved: 'Interface language changed', priority_mode_saved: 'Priority farming mode saved',
-    bot_disabled: 'Disabled', bot_offline: 'Offline', bot_paused: 'Paused', bot_farming: 'Farming', bot_online: 'Online', bot_settings: 'Bot settings', start_bot: 'Start bot', stop_bot: 'Stop bot', resume_farm: 'Resume farming', pause_farm: 'Pause farming', new_bot: 'New bot', save_bot: 'Save', create_bot: 'Create', keep_password: '(leave empty to keep unchanged)',
+    bot_disabled: 'Disabled', bot_offline: 'Offline', bot_paused: 'Paused', bot_farming: 'Farming', bot_online: 'Online', bot_settings: 'Bot settings', start_bot: 'Start bot', stop_bot: 'Stop bot', resume_farm: 'Resume farming', pause_farm: 'Pause farming', new_bot: 'New bot', save_bot: 'Save', create_bot: 'Create', keep_password: '(leave empty to keep unchanged)', bot_details: 'Bot profile', bot_actions: 'Actions', bot_enable: 'Enable', bot_disable: 'Disable', bot_games: 'Running games', bot_no_games: 'No games are currently running', bot_game_loading: 'Loading game…', bot_game_unknown: 'Game unavailable', bot_enabled: 'Bot enabled', bot_disabled_message: 'Bot disabled', bot_control_error: 'Could not perform the bot action', bots_empty: 'No bots found. Add a bot in ASF.', bots_not_found: 'No bots match the search', sidebar_expand: 'Expand menu', service_data: 'Data and diagnostics', diagnostics: 'Diagnostics', clear_covers: 'Clear covers', clear_names: 'Clear names', clear_history: 'Clear history', updates_status: 'Update status', cache_cleared: 'Cache cleared', bots_search: 'Search bots', bot_online_time: 'Online', bot_running_time: 'Running',
     plugins_failed: 'Could not load plugins', plugin_store_failed: 'Could not load GitHub catalogue', plugin_installed: 'Plugin installed', plugin_removed: 'Plugin removed',
-    input_login_title: 'Steam login', input_login_label: 'login', input_login_placeholder: 'Steam login', input_password_title: 'Steam password', input_password_label: 'password', input_password_placeholder: 'Password', input_guard_title: 'Steam Guard', input_guard_label: 'Steam Guard code (from e-mail)', input_parental_title: 'Parental code', input_parental_label: 'Steam parental code', input_parental_placeholder: 'Code', input_2fa_title: 'Two-factor code (2FA)', input_2fa_label: 'authenticator code', input_confirm_title: 'Login confirmation', input_confirm_label: 'confirmation', input_request_for: 'Login request for account:', input_enter_for: 'Enter {value} for the account:', input_required_for: 'Login is not complete for {bot}: {value} is required', input_required: '{value} is required for bot {bot}', input_value_required: 'Enter a value', input_sent: 'Sent for {bot}', input_later: 'Login request deferred', input_alert: 'There are pending login requests. Click to open.',
+    input_login_title: 'Steam login', input_login_label: 'login', input_login_placeholder: 'Steam login', input_password_title: 'Steam password', input_password_label: 'password', input_password_placeholder: 'Password', input_guard_title: 'Steam Guard', input_guard_label: 'Steam Guard code (from e-mail)', input_parental_title: 'Parental code', input_parental_label: 'Steam parental code', input_parental_placeholder: 'Code', input_2fa_title: 'Two-factor code (2FA)', input_2fa_label: 'authenticator code', input_confirm_title: 'Login confirmation', input_confirm_label: 'confirmation', input_request_for: 'Login request for account:', input_enter_for: 'Enter {value} for the account:', input_required_for: 'Login is not complete for {bot}: {value} is required', input_required: '{value} is required for bot {bot}', input_value_required: 'Enter a value', input_sent: 'Sent for {bot}', input_later: 'Login request deferred', input_alert: 'There are pending login requests. Click to open.', login_request_new: '{value} is required for bot {bot}', login_request_resolved: 'Login request completed for {bot}', login_request_poll_error: 'Background login-request check failed',
     popular_loading: 'getting Steam’s global online leaderboard', popular_unavailable: 'Steam’s global leaderboard is unavailable; using the hours order.', update_downloading: 'Downloading…', update_started: 'Update started, BetterASF will close', update_failed: 'Could not update', update_check_failed: 'Could not check for updates', update_none: 'No updates available', update_available: 'A new BetterASF version {version} is available', update_button: 'Update', asf_restart: 'Restart ASF', asf_update_check: 'Check ASF update',
   },
   uk: {
@@ -56,7 +56,7 @@ const I18N = {
     dashboard_title: 'Головна', bots_title: 'Боти', commands_title: 'Команди', plugins_title: 'Плагіни', log_title: 'Журнал', settings_title: 'Налаштування',
     refresh: 'Оновити', execute: 'Виконати', clear: 'Очистити', save: 'Зберегти', cancel: 'Скасувати', remove: 'Видалити', install: 'Встановити', installing: 'Встановлення…', removing: 'Видалення…',
     appearance_title: 'Оформлення та теми', behavior_title: 'Поведінка програми', priority_games: 'Пріоритетні ігри для фарму годин', language_label: 'Мова інтерфейсу',
-    theme_choose: 'Вибрати тему зі списку:', custom_theme: 'Власна тема', custom_theme_add: 'Створити власну тему', custom_theme_title: 'Власна тема', custom_theme_sub: 'Виберіть світлу або темну основу, завантажте своє зображення та за потреби зробіть елементи прозорими.', custom_theme_base: 'Основа теми', custom_theme_dark: 'Темна', custom_theme_light: 'Світла', custom_theme_image: 'Власна картинка', custom_theme_image_hint: 'PNG, JPG або WebP, до 12 МБ. Якщо файл не вибрати, поточна картинка збережеться.', custom_theme_transparent: 'Увімкнути прозорість елементів', custom_theme_remove_image: 'Прибрати картинку', custom_theme_saved: 'Власну тему збережено', custom_theme_error: 'Не вдалося зберегти власну тему', custom_theme_image_too_large: 'Картинка має бути не більшою за 12 МБ', custom_theme_image_invalid: 'Виберіть PNG, JPG або WebP', custom_theme_image_loaded: 'Картинку вибрано',
+    custom_theme: 'Власна тема', custom_theme_title: 'Власна тема', custom_theme_sub: 'Виберіть світлу або темну основу, завантажте своє зображення та за потреби зробіть елементи прозорими.', custom_theme_base: 'Основа теми', custom_theme_dark: 'Темна', custom_theme_light: 'Світла', custom_theme_image: 'Власний медіафон', custom_theme_image_hint: 'PNG, JPG, WebP, GIF, MP4 або WebM. Зображення до 12 МБ, відео до 50 МБ.', custom_theme_transparent: 'Увімкнути прозорість елементів', custom_theme_remove_image: 'Прибрати картинку', custom_theme_saved: 'Власну тему збережено', custom_theme_error: 'Не вдалося зберегти власну тему', custom_theme_image_too_large: 'Зображення до 12 МБ, відео до 50 МБ', custom_theme_image_invalid: 'Виберіть PNG, JPG, WebP, GIF, MP4 або WebM', custom_theme_image_loaded: 'Медіафон вибрано',
     kpi_games: 'Ігор залишилося', kpi_time: 'Часу залишилося', kpi_cards: 'Карток залишилося', dashboard_refresh: 'Оновити', commands_hint: 'Підказки:', command_placeholder: 'Введіть команду, напр. status ASF', command_output: 'Вивід команди з’явиться тут…',
     appearance_sub: 'Виберіть кольорову схему та фонове зображення для інтерфейсу BetterASF.', behavior_sub: 'Налаштування самого BetterASF. Вони зберігаються в Documents\BetterASF\settings.json.',
     tray_title: 'Згортання в трей', tray_sub: 'Кнопка закриття згортатиме BetterASF, не завершуючи ASF.', minimized_title: 'Запуск у згорнутому стані', minimized_sub: 'Після відкриття BetterASF одразу згорнеться; якщо ввімкнений трей — сховається в трей.', autostart_title: 'Запуск разом із системою', autostart_sub: 'Додає BetterASF до автозавантаження поточного користувача Windows.', economy_title: 'Економний режим інтерфейсу', economy_sub: 'Вимикає фонові картинки, blur/важкі тіні, аватарки та рідше оновлює дані.',
@@ -64,15 +64,15 @@ const I18N = {
     plugins_library: 'Бібліотека', plugins_store: 'Магазин плагінів', plugins_library_note: 'Встановлені плагіни ASF. Після зміни ASF перезапускається автоматично.', plugins_store_note: 'Каталог і ZIP-релізи перевіряються безпосередньо на GitHub. Встановлюйте лише плагіни, яким довіряєте.',
     plugin_remove_title: 'Видалити плагін?', plugin_remove_text: 'Плагін буде видалено з ASF:', plugin_remove_restart: 'ASF буде автоматично перезапущено. Цю дію не можна скасувати.',
     plugin_empty: 'Встановлених плагінів немає.', plugin_loaded: 'Завантажено ASF', plugin_not_loaded: 'Очікує перезапуску', plugin_unknown: 'Плагін', plugin_store_loading: 'Завантаження каталогу GitHub…', plugin_library_loading: 'Завантаження бібліотеки…', plugin_files: 'DLL-файлів', plugin_size: 'Розмір', plugin_source: 'Джерело', plugin_version: 'Версія', plugin_author: 'Автор', plugin_unavailable: 'У GitHub немає ZIP-релізу', plugin_restart: 'ASF перезапускається для застосування зміни.',
-    hour_priority_mode: 'Режим пріоритетного фарму годин', experimental: 'Експериментальна функція', hours_asc: 'За зростанням годин', hours_desc: 'За спаданням годин', hours_popular: 'Популярні — послідовні списки з топу онлайну', hour_priority_mode_hint: 'У режимі «Популярні» BetterASF бере актуальний топ Steam за онлайном і видає наступним акаунтам різні списки ігор.',
+    hour_priority_mode: 'Режим пріоритетного фарму годин', experimental: 'Експериментальна функція', hours_asc: 'За зростанням годин', hours_desc: 'За спаданням годин', hours_popular: 'Популярні — послідовні списки з топу онлайну', hour_priority_mode_hint: 'У режимі «Популярні» BetterASF бере актуальний топ Steam за онлайном і видає наступним акаунтам різні списки ігор.', hour_cards_take_over: 'Для {bot} знайдено ігри з картками: повертаю ASF до фарму карток.', hour_cards_switched: 'Фарм годин зупинено: картки з’явилися на {count} акаунті(ах).', hour_cards_reset_failed: 'Не вдалося переключити {bot} на фарм карток', hour_service_started: '{bot}: запущено {count} ігор для фарму годин', hour_service_no_targets: 'Немає акаунтів, готових до фарму годин', hour_service_no_games: 'Відповідних ігор не знайдено', hour_service_need_api_key: 'Для фарму годин потрібен ключ Steam Web API', hour_service_cards_take_over: '{bot}: фарм карток отримав пріоритет над фармом годин', hour_service_reset_error: 'Не вдалося повернути {bot} до фарму карток', hour_service_games_error: '{bot}: не вдалося отримати бібліотеку ігор', hour_service_private_games: '{bot}: бібліотека ігор недоступна', hour_service_play_error: '{bot}: не вдалося запустити ігри', hour_service_asf_unavailable: 'ASF недоступний для фарму годин', hour_service_poll_error: 'Помилка фонової перевірки фарму годин',
     setting_saved: 'Налаштування збережено', settings_error: 'Не вдалося застосувати налаштування', language_saved: 'Мову інтерфейсу змінено', priority_mode_saved: 'Режим пріоритетного фарму збережено',
-    bot_disabled: 'Вимкнено', bot_offline: 'Не в мережі', bot_paused: 'Пауза', bot_farming: 'Фармить', bot_online: 'У мережі', bot_settings: 'Налаштування бота', start_bot: 'Запустити бота', stop_bot: 'Зупинити бота', resume_farm: 'Продовжити фарм', pause_farm: 'Пауза фарму', new_bot: 'Новий бот', save_bot: 'Зберегти', create_bot: 'Створити', keep_password: '(залиште порожнім, щоб не змінювати)',
+    bot_disabled: 'Вимкнено', bot_offline: 'Не в мережі', bot_paused: 'Пауза', bot_farming: 'Фармить', bot_online: 'У мережі', bot_settings: 'Налаштування бота', start_bot: 'Запустити бота', stop_bot: 'Зупинити бота', resume_farm: 'Продовжити фарм', pause_farm: 'Пауза фарму', new_bot: 'Новий бот', save_bot: 'Зберегти', create_bot: 'Створити', keep_password: '(залиште порожнім, щоб не змінювати)', bot_details: 'Профіль бота', bot_actions: 'Дії', bot_enable: 'Увімкнути', bot_disable: 'Вимкнути', bot_games: 'Запущені ігри', bot_no_games: 'Зараз ігри не запущені', bot_game_loading: 'Завантаження гри…', bot_game_unknown: 'Гра недоступна', bot_enabled: 'Бота увімкнено', bot_disabled_message: 'Бота вимкнено', bot_control_error: 'Не вдалося виконати дію для бота', bots_empty: 'Ботів не знайдено. Додайте бота в ASF.', bots_not_found: 'Пошук не дав результатів', sidebar_expand: 'Розгорнути меню', service_data: 'Дані й діагностика', diagnostics: 'Діагностика', clear_covers: 'Очистити обкладинки', clear_names: 'Очистити назви', clear_history: 'Очистити історію', updates_status: 'Статус оновлень', cache_cleared: 'Кеш очищено', bots_search: 'Пошук ботів', bot_online_time: 'У мережі', bot_running_time: 'Працює',
     plugins_failed: 'Не вдалося отримати плагіни', plugin_store_failed: 'Не вдалося завантажити каталог GitHub', plugin_installed: 'Плагін установлено', plugin_removed: 'Плагін видалено',
-    input_login_title: 'Логін Steam', input_login_label: 'логін', input_login_placeholder: 'Логін Steam', input_password_title: 'Пароль Steam', input_password_label: 'пароль', input_password_placeholder: 'Пароль', input_guard_title: 'Steam Guard', input_guard_label: 'код Steam Guard (з e-mail)', input_parental_title: 'Батьківський код', input_parental_label: 'батьківський код Steam', input_parental_placeholder: 'Код', input_2fa_title: 'Двофакторний код (2FA)', input_2fa_label: 'код автентифікатора', input_confirm_title: 'Підтвердження входу', input_confirm_label: 'підтвердження', input_request_for: 'Запит на вхід для акаунта:', input_enter_for: 'Введіть {value} для акаунта:', input_required_for: 'Вхід не завершено для {bot}: потрібен {value}', input_required: 'Потрібно {value} для бота {bot}', input_value_required: 'Введіть значення', input_sent: 'Надіслано для {bot}', input_later: 'Запит на вхід відкладено', input_alert: 'Є запити на вхід. Натисніть, щоб відкрити.',
+    input_login_title: 'Логін Steam', input_login_label: 'логін', input_login_placeholder: 'Логін Steam', input_password_title: 'Пароль Steam', input_password_label: 'пароль', input_password_placeholder: 'Пароль', input_guard_title: 'Steam Guard', input_guard_label: 'код Steam Guard (з e-mail)', input_parental_title: 'Батьківський код', input_parental_label: 'батьківський код Steam', input_parental_placeholder: 'Код', input_2fa_title: 'Двофакторний код (2FA)', input_2fa_label: 'код автентифікатора', input_confirm_title: 'Підтвердження входу', input_confirm_label: 'підтвердження', input_request_for: 'Запит на вхід для акаунта:', input_enter_for: 'Введіть {value} для акаунта:', input_required_for: 'Вхід не завершено для {bot}: потрібен {value}', input_required: 'Потрібно {value} для бота {bot}', input_value_required: 'Введіть значення', input_sent: 'Надіслано для {bot}', input_later: 'Запит на вхід відкладено', input_alert: 'Є запити на вхід. Натисніть, щоб відкрити.', login_request_new: 'Для бота {bot} потрібен {value}', login_request_resolved: 'Запит на вхід завершено для {bot}', login_request_poll_error: 'Помилка фонової перевірки запитів входу',
     popular_loading: 'отримую глобальний топ Steam за онлайном', popular_unavailable: 'Глобальний топ Steam недоступний; використовую порядок за годинами.', update_downloading: 'Завантаження…', update_started: 'Оновлення запущено, BetterASF закриється', update_failed: 'Не вдалося оновити', update_check_failed: 'Не вдалося перевірити оновлення', update_none: 'Оновлень немає', update_available: 'Доступна нова версія BetterASF {version}', update_button: 'Оновити', asf_restart: 'Перезапуск ASF', asf_update_check: 'Перевірка оновлення ASF',
   }
 };
-let UI_LANGUAGE = localStorage.getItem('betterasf_language') || 'ru';
+let UI_LANGUAGE = 'ru';
 if (!I18N[UI_LANGUAGE]) UI_LANGUAGE = 'ru';
 
 function t(key) {
@@ -82,9 +82,6 @@ function t(key) {
 function tf(key, values = {}) {
   return t(key).replace(/\{(\w+)\}/g, (_, name) => String(values[name] ?? ''));
 }
-
-// Covers static form labels that do not need an individual data-i18n attribute.
-// Source text is retained in a WeakMap, so changing language repeatedly remains reversible.
 const STATIC_TEXT_I18N = {
   en: {
     'Загрузка…': 'Loading…', 'Тёмная': 'Dark', 'Светлая': 'Light', 'Тёмная тема (Стандартная)': 'Dark theme (Standard)', 'Светлая тема (Стандартная)': 'Light theme (Standard)', 'Тёмная тема (Dead Dream)': 'Dark theme (Dead Dream)', 'Светлая тема (Dead Dream)': 'Light theme (Dead Dream)', 'Выбрать тему из списка:': 'Choose a theme from the list:',
@@ -152,9 +149,9 @@ function translateStaticText() {
 function applyLanguage(language, persist = true) {
   UI_LANGUAGE = I18N[language] ? language : 'ru';
   document.documentElement.lang = UI_LANGUAGE === 'uk' ? 'uk' : UI_LANGUAGE;
-  if (persist) localStorage.setItem('betterasf_language', UI_LANGUAGE);
+
   $$('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
-  $$('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle); });
+  $$('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle); if (el.hasAttribute('aria-label')) el.setAttribute('aria-label', t(el.dataset.i18nTitle)); });
   $$('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
   translateStaticText();
   translateStaticAttributes();
@@ -173,11 +170,12 @@ const API_CANDIDATES = (() => {
 let API_BASE = API_CANDIDATES[0] || '';
 let IPC_PASSWORD = CFG.password || localStorage.getItem('asf_ipc_password') || '';
 let pollTimer = null;
-let ECONOMY_MODE = localStorage.getItem('asf_economy_mode') === '1';
-let CUSTOM_THEME = { base: 'dark', transparent: false, imageUrl: '', hasImage: false };
-let CUSTOM_THEME_PENDING_IMAGE = '';
-let CUSTOM_THEME_REMOVE_IMAGE = false;
-let CUSTOM_THEME_PREVIOUS_SELECTION = 'dark';
+let ECONOMY_MODE = false;
+let CUSTOM_THEME = { base: 'dark', transparent: false, mediaUrl: '', mediaType: '', hasMedia: false };
+let CUSTOM_THEME_PENDING_MEDIA = '';
+let CUSTOM_THEME_PENDING_MEDIA_TYPE = '';
+let CUSTOM_THEME_REMOVE_MEDIA = false;
+let CURRENT_FULL_THEME = CFG.theme || 'dark';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
@@ -210,13 +208,19 @@ function localizeLogText(message) {
   return text;
 }
 
-function logEvent(msg) {
+let _eventLogLastId = 0;
+function logEvent(msg, persist = true) {
   const el = $('#log-output');
-  if (!el) return;
   const locale = UI_LANGUAGE === 'uk' ? 'uk-UA' : UI_LANGUAGE === 'en' ? 'en-US' : 'ru-RU';
   const now = new Date().toLocaleTimeString(locale);
-  el.textContent += `[${now}] ${localizeLogText(msg)}\n`;
-  el.scrollTop = el.scrollHeight;
+  const message = localizeLogText(msg);
+  if (el) {
+    el.textContent += `[${now}] ${message}\n`;
+    el.scrollTop = el.scrollHeight;
+  }
+  if (persist) {
+    fetch('/__events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message, source: 'ui', language: UI_LANGUAGE }) }).catch(() => {});
+  }
 }
 
 function toast(msg, type = '') {
@@ -407,11 +411,183 @@ function botCardHTML(name, bot) {
     </div>`;
 }
 
+function botEnabledInConfig(bot) {
+  if (!bot) return false;
+  if (bot.BotConfig && Object.prototype.hasOwnProperty.call(bot.BotConfig, 'Enabled')) return bot.BotConfig.Enabled !== false;
+  return bot.Enabled !== false;
+}
+
+function botActionIcon(action, label, active = false) {
+  const icons = {
+    settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+    start: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m8 5 11 7-11 7V5z"/></svg>',
+    pause: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 5v14M16 5v14"/></svg>',
+    resume: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m8 5 11 7-11 7V5z"/></svg>',
+    enable: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg>',
+    disable: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/><path d="m4 4 16 16"/></svg>',
+  };
+  return `<button class="bot-icon-action${active ? ' bot-icon-action--danger' : ''}" type="button" data-profile-act="${action}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">${icons[action] || ''}</button>`;
+}
+
+function botActionButtons(name, bot) {
+  const running = !!bot.KeepRunning;
+  const playingAction = !running ? 'start' : (isPaused(bot) ? 'resume' : 'pause');
+  const playingLabel = !running ? t('start_bot') : (isPaused(bot) ? t('resume_farm') : t('pause_farm'));
+  const enabled = botEnabledInConfig(bot);
+  return `${botActionIcon('settings', t('bot_settings'))}${botActionIcon(playingAction, playingLabel)}${botActionIcon(enabled ? 'disable' : 'enable', enabled ? t('bot_disable') : t('bot_enable'), enabled)}`;
+}
+
+function profileBotCardHTML(name, bot) {
+  const state = botState(bot);
+  const avatar = botAvatar(bot);
+  const avatarHtml = avatar ? `<img class="bot-profile-avatar" src="${avatar}" alt="" onerror="this.style.visibility='hidden'">` : `<div class="bot-profile-avatar"></div>`;
+  return `<article class="bot-profile-card" data-bot-open="${escapeHtml(name)}">
+    <div class="bot-profile-main">${avatarHtml}<div class="bot-profile-identity"><div class="bot-name"><span class="dot ${state.key}"></span>${escapeHtml(bot.Nickname || name)}</div></div></div>
+  </article>`;
+}
+
+let _openBotDetails = null;
+const GAME_META = new Map();
+
+function gameAppID(game) {
+  const value = (typeof game === 'number' || typeof game === 'string')
+    ? game
+    : game && (game.AppID ?? game.appID ?? game.appid ?? game.Id ?? game.id);
+  const id = Number(value);
+  return Number.isFinite(id) && id > 0 ? id : 0;
+}
+
+function activeBotGames(bot, botName = '') {
+  if (!bot || !bot.KeepRunning || !bot.IsConnectedAndLoggedOn) return [];
+  const farmer = bot.CardsFarmer || {};
+  const seen = new Set();
+  const games = [];
+  for (const game of Array.isArray(farmer.CurrentGamesFarming) ? farmer.CurrentGamesFarming : []) {
+    const appID = gameAppID(game);
+    if (appID && !seen.has(appID)) { seen.add(appID); games.push(game); }
+  }
+  for (const appID of _hourFarmGamesByBot.get(botName) || []) {
+    if (!seen.has(appID)) { seen.add(appID); games.push({ AppID: appID }); }
+  }
+  return games;
+}
+
+function gameTitle(game) {
+  const appID = gameAppID(game);
+  const supplied = game && (game.GameName || game.Name || game.name || game.Title || game.title);
+  if (supplied) return supplied;
+  if (GAME_META.has(appID)) return (GAME_META.get(appID) || {}).name || t('bot_game_unknown');
+  return t('bot_game_loading');
+}
+
+function steamHeader(appID) {
+  return `/__steam/cover/${appID}`;
+}
+
+function formatBotDuration(seconds) {
+  const total = Math.max(0, Number(seconds) || 0);
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor((total % 86400) / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  if (days) return `${days}d ${hours}h`;
+  if (hours) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
+function renderBotDetails() {
+  if (!_openBotDetails) return;
+  const bot = BOTS[_openBotDetails];
+  if (!bot) { closeBotDetails(); return; }
+  const state = botState(bot);
+  const avatar = botAvatar(bot);
+  const avatarHtml = avatar ? `<img class="bot-detail-avatar" src="${avatar}" alt="" onerror="this.style.visibility='hidden'">` : `<div class="bot-detail-avatar"></div>`;
+  $('#bot-details-profile').innerHTML = `${avatarHtml}<div class="bot-detail-identity"><div class="bot-name"><span class="dot ${state.key}"></span>${escapeHtml(bot.Nickname || _openBotDetails)}</div><div class="bot-status">${state.label}</div></div>`;
+  $('#bot-details-actions').setAttribute('data-bot', _openBotDetails);
+  $('#bot-details-actions').innerHTML = botActionButtons(_openBotDetails, bot);
+  $('#bot-details-timing').innerHTML = `<div><span>${t('bot_running_time')}</span><b>${formatBotDuration(bot.BetterASFRunningSeconds)}</b></div><div><span>${t('bot_online_time')}</span><b>${formatBotDuration(bot.BetterASFOnlineSeconds)}</b></div>`;
+  const games = activeBotGames(bot, _openBotDetails);
+  $('#bot-details-games').innerHTML = games.length ? games.map(game => {
+    const appID = gameAppID(game);
+    return `<div class="bot-game-row"><img src="${steamHeader(appID)}" alt="" loading="lazy" onerror="this.classList.add('failed')"><span>${escapeHtml(gameTitle(game))}</span></div>`;
+  }).join('') : `<div class="bot-games-empty">${t('bot_no_games')}</div>`;
+  bindProfileActions();
+}
+
+async function fetchBotGameMetadata(bot) {
+  const ids = activeBotGames(bot, _openBotDetails).map(gameAppID).filter(id => id && !GAME_META.has(id));
+  if (!ids.length) return;
+  const lang = UI_LANGUAGE === 'ru' ? 'russian' : UI_LANGUAGE === 'uk' ? 'ukrainian' : 'english';
+  try {
+    const steamID = bot && (bot.s_SteamID || bot.SteamID || '');
+    const response = await fetch('/__game_meta?appids=' + encodeURIComponent(ids.join(',')) + '&lang=' + lang + '&steamid=' + encodeURIComponent(String(steamID)), { cache: 'no-store' });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) return;
+    for (const [appID, meta] of Object.entries(data.items || {})) GAME_META.set(Number(appID), meta || {});
+    if (_openBotDetails && BOTS[_openBotDetails] === bot) renderBotDetails();
+  } catch (e) {}
+}
+
+function openBotDetails(name) {
+  if (!BOTS[name]) return;
+  _openBotDetails = name;
+  $('#bot-details-title').textContent = t('bot_games');
+  $('#bot-details-modal').classList.add('show');
+  $('#bot-details-modal').setAttribute('aria-hidden', 'false');
+  renderBotDetails();
+  fetchBotGameMetadata(BOTS[name]);
+}
+
+function closeBotDetails() {
+  $('#bot-details-modal').classList.remove('show');
+  $('#bot-details-modal').setAttribute('aria-hidden', 'true');
+  _openBotDetails = null;
+}
+
+async function botServiceAction(name, action) {
+  const response = await fetch('/__bots/' + encodeURIComponent(name) + '/action', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.ok) throw new Error(data.message || ('HTTP ' + response.status));
+  return data;
+}
+
+async function runProfileAction(name, action) {
+  const bot = BOTS[name];
+  if (!bot) return;
+  try {
+    if (action === 'settings') { openEditBot(name); return; }
+    await botServiceAction(name, action);
+    if (action === 'enable' || action === 'disable') toast(action === 'enable' ? t('bot_enabled') : t('bot_disabled_message'), 'ok');
+    logEvent('Bot ' + name + ': ' + action);
+    setTimeout(refresh, 700);
+  } catch (e) {
+    toast(t('bot_control_error') + ': ' + e.message, 'err');
+    logEvent(t('bot_control_error') + ': ' + e.message);
+  }
+}
+
+function bindProfileActions() {
+  $$('[data-profile-act]').forEach(button => button.onclick = event => {
+    event.stopPropagation();
+    const parent = button.closest('[data-bot]');
+    runProfileAction(parent && parent.dataset.bot, button.dataset.profileAct);
+  });
+  $$('[data-bot-open]').forEach(card => card.onclick = event => {
+    if (event.target.closest('button')) return;
+    openBotDetails(card.dataset.botOpen);
+  });
+}
+
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 let BOTS = {};
+let BOT_SEARCH_QUERY = '';
+let SIDEBAR_COLLAPSED = false;
 function renderBots(bots) {
   BOTS = bots || {};
   const names = Object.keys(bots || {});
@@ -494,16 +670,23 @@ function renderBots(bots) {
   $('#kpi-cards').textContent = hasData ? cards : '—';
   $('#kpi-time').textContent = timeStr;
 
-  const cardsHtml = names.length
+  const dashboardCards = names.length
     ? names.map(n => botCardHTML(n, bots[n])).join('')
-    : `<div class="empty">Ботов не найдено. Добавьте бота в ASF.</div>`;
+    : `<div class="empty">${t('bots_empty')}</div>`;
+  const search = BOT_SEARCH_QUERY.trim().toLowerCase();
+  const profileNames = names.filter(name => !search || name.toLowerCase().includes(search) || String(bots[name].Nickname || '').toLowerCase().includes(search));
+  const profileCards = profileNames.length
+    ? profileNames.map(n => profileBotCardHTML(n, bots[n])).join('')
+    : `<div class="empty">${search ? t('bots_not_found') : t('bots_empty')}</div>`;
 
-  $('#dash-bots').innerHTML = cardsHtml +
-    `<div class="bot-card is-add" id="addBotDash">＋ Добавить бота</div>`;
-  $('#bots-list').innerHTML = cardsHtml +
-    `<div class="bot-card is-add" id="addBotList">＋ Добавить бота</div>`;
+  $('#dash-bots').innerHTML = dashboardCards +
+    `<div class="bot-card is-add" id="addBotDash">＋ ${t('create_bot')}</div>`;
+  $('#bots-list').innerHTML = profileCards +
+    `<div class="bot-profile-card bot-profile-card--add" id="addBotList">＋ ${t('create_bot')}</div>`;
 
   bindBotActions();
+  bindProfileActions();
+  if (_openBotDetails) renderBotDetails();
 }
 
 function bindBotActions() {
@@ -513,21 +696,10 @@ function bindBotActions() {
       const act = btn.getAttribute('data-act');
       if (act === 'edit') { openEditBot(bot); return; }
       try {
-        if (act === 'pause') {
-          await api(`/Api/Bot/${encodeURIComponent(bot)}/Pause`, {
-            method: 'POST', body: JSON.stringify({ Permanent: true, ResumeInSeconds: 0 }),
-          });
-          toast(`Пауза: ${bot}`, 'ok');
-        } else if (act === 'resume') {
-          await api(`/Api/Bot/${encodeURIComponent(bot)}/Resume`, { method: 'POST' });
-          toast(`Возобновлено: ${bot}`, 'ok');
-        } else {
-          await api(`/Api/Bot/${encodeURIComponent(bot)}/${act === 'start' ? 'Start' : 'Stop'}`, { method: 'POST' });
-          toast(`${act === 'start' ? 'Запуск' : 'Остановка'}: ${bot}`, 'ok');
-        }
-        logEvent(`Бот ${bot}: ${act}`);
-        setTimeout(refresh, 900);
-      } catch (e) { toast(e.message, 'err'); logEvent('Ошибка: ' + e.message); }
+        await botServiceAction(bot, act);
+        logEvent('Bot ' + bot + ': ' + act);
+        setTimeout(refresh, 700);
+      } catch (e) { toast(e.message, 'err'); logEvent(e.message); }
     };
   });
   $$('[data-edit]').forEach(el => { el.onclick = () => openEditBot(el.getAttribute('data-edit')); });
@@ -538,62 +710,61 @@ function bindBotActions() {
 
 let _editingBot = null;
 
-const FP = { paused: 1, shutdown: 2, priorityonly: 8, skipunplayed: 32 };
-const TP = { donations: 1, matcher: 2, matchall: 4, nobottrades: 8, matchactively: 16 };
-const BB = { rejfriends: 1, rejtrades: 2, rejgroups: 4, dismissnotif: 8, markread: 16, markself: 32, noincoming: 64 };
-const RP = { forwarding: 1, distributing: 2, keepmissing: 4, assumewallet: 8 };
+function setChk(id, value) {
+  const element = $('#' + id);
+  if (element) element.checked = !!value;
+}
 
-function setChk(id, v) { const el = $('#' + id); if (el) el.checked = !!v; }
-function getChk(id) { const el = $('#' + id); return el && el.checked; }
+function getChk(id) {
+  const element = $('#' + id);
+  return !!(element && element.checked);
+}
 
 function showAdvanced(open) {
   $('#ab-adv').style.display = open ? 'block' : 'none';
   $('#ab-adv-toggle').classList.toggle('open', open);
 }
 
-function fillForm(c) {
-  $('#ab-login').value = c.SteamLogin || '';
+function fillForm(form = {}) {
+  $('#ab-login').value = form.steam_login || '';
   $('#ab-pass').value = '';
-  $('#ab-enabled').checked = c.Enabled !== false;
-  $('#ab-online').value = String(c.OnlineStatus != null ? c.OnlineStatus : 1);
-  $('#ab-hours').value = (c.HoursUntilCardDrops != null ? c.HoursUntilCardDrops : 3);
-  const fp = c.FarmingPreferences || 0, tp = c.TradingPreferences || 0,
-        bb = c.BotBehaviour || 0, rp = c.RedeemingPreferences || 0;
-  setChk('ab-paused', fp & FP.paused);
-  setChk('ab-shutdown', fp & FP.shutdown);
-  setChk('ab-priorityonly', fp & FP.priorityonly);
-  setChk('ab-skipunplayed', fp & FP.skipunplayed);
-  setChk('ab-matcher', tp & TP.matcher);
-  setChk('ab-matchall', tp & TP.matchall);
-  setChk('ab-donations', tp & TP.donations);
-  setChk('ab-gifts', !!c.AcceptGifts);
-  setChk('ab-matchactively', tp & TP.matchactively);
-  setChk('ab-nobottrades', tp & TP.nobottrades);
-  setChk('ab-rejtrades', bb & BB.rejtrades);
-  setChk('ab-rejfriends', bb & BB.rejfriends);
-  setChk('ab-rejgroups', bb & BB.rejgroups);
-  setChk('ab-dismissnotif', bb & BB.dismissnotif);
-  setChk('ab-markread', bb & BB.markread);
-  setChk('ab-markself', bb & BB.markself);
-  setChk('ab-noincoming', bb & BB.noincoming);
-  setChk('ab-forwarding', rp & RP.forwarding);
-  setChk('ab-distributing', rp & RP.distributing);
-  setChk('ab-keepmissing', rp & RP.keepmissing);
-  setChk('ab-assumewallet', rp & RP.assumewallet);
-  $('#ab-farmorder').value = String((c.FarmingOrders && c.FarmingOrders[0]) || 0);
-  $('#ab-uimode').value = String(c.UserInterfaceMode != null ? c.UserInterfaceMode : 0);
-  const botNameForLimit = _editingBot || $('#ab-name').value || '';
-  $('#ab-hour-max-games').value = String(hourFarmMaxForBot(botNameForLimit));
-  $('#ab-device').value = String(c.GamingDeviceType != null ? c.GamingDeviceType : 1);
-  $('#ab-tradecheck').value = (c.TradeCheckPeriod != null ? c.TradeCheckPeriod : 60);
-  $('#ab-sendtrade').value = (c.SendTradePeriod != null ? c.SendTradePeriod : 0);
-  $('#ab-tradetoken').value = c.SteamTradeToken || '';
-  $('#ab-machine').value = c.MachineName || '';
-  $('#ab-custfarm').value = c.CustomGamePlayedWhileFarming || '';
-  $('#ab-custidle').value = c.CustomGamePlayedWhileIdle || '';
-  $('#ab-idlegames').value = (c.GamesPlayedWhileIdle || []).join(',');
-  $('#ab-parental').value = c.SteamParentalCode || '';
-  setChk('ab-loginkeys', c.UseLoginKeys !== false);
+  $('#ab-enabled').checked = form.enabled !== false;
+  $('#ab-online').value = String(form.online_status != null ? form.online_status : 1);
+  $('#ab-hours').value = form.hours_until_cards != null ? form.hours_until_cards : 3;
+  $('#ab-hour-max-games').value = String(form.hour_max != null ? form.hour_max : 32);
+  setChk('ab-paused', form.farm_paused);
+  setChk('ab-shutdown', form.shutdown_after_farm);
+  setChk('ab-priorityonly', form.priority_only);
+  setChk('ab-skipunplayed', form.skip_unplayed);
+  setChk('ab-matcher', form.matcher);
+  setChk('ab-matchall', form.match_all);
+  setChk('ab-donations', form.accept_donations);
+  setChk('ab-gifts', form.accept_gifts);
+  setChk('ab-matchactively', form.match_actively);
+  setChk('ab-nobottrades', form.no_bot_trades);
+  setChk('ab-rejtrades', form.reject_trades);
+  setChk('ab-rejfriends', form.reject_friends);
+  setChk('ab-rejgroups', form.reject_groups);
+  setChk('ab-dismissnotif', form.dismiss_notifications);
+  setChk('ab-markread', form.mark_read);
+  setChk('ab-markself', form.mark_self);
+  setChk('ab-noincoming', form.no_incoming_trades);
+  setChk('ab-forwarding', form.forwarding);
+  setChk('ab-distributing', form.distributing);
+  setChk('ab-keepmissing', form.keep_missing);
+  setChk('ab-assumewallet', form.assume_wallet);
+  $('#ab-farmorder').value = String(form.farm_order != null ? form.farm_order : 0);
+  $('#ab-uimode').value = String(form.ui_mode != null ? form.ui_mode : 0);
+  $('#ab-device').value = String(form.device != null ? form.device : 1);
+  $('#ab-tradecheck').value = form.trade_check != null ? form.trade_check : 60;
+  $('#ab-sendtrade').value = form.send_trade != null ? form.send_trade : 0;
+  $('#ab-tradetoken').value = form.trade_token || '';
+  $('#ab-machine').value = form.machine || '';
+  $('#ab-custfarm').value = form.custom_farm || '';
+  $('#ab-custidle').value = form.custom_idle || '';
+  $('#ab-idlegames').value = (form.idle_games || []).join(',');
+  $('#ab-parental').value = form.parental_code || '';
+  setChk('ab-loginkeys', form.use_login_keys !== false);
 }
 
 function openAddBot() {
@@ -604,15 +775,13 @@ function openAddBot() {
   $('#ab-name').disabled = false;
   $('#ab-name').value = '';
   $('#ab-pass-hint').textContent = '';
-  fillForm({ Enabled: true, OnlineStatus: 1, HoursUntilCardDrops: 3 });
+  fillForm({ enabled: true, online_status: 1, hours_until_cards: 3, hour_max: 32, use_login_keys: true });
   showAdvanced(false);
   $('#addbot-modal').classList.add('show');
   $('#ab-name').focus();
 }
 
-function openEditBot(name) {
-  const bot = BOTS[name];
-  const c = (bot && bot.BotConfig) ? bot.BotConfig : {};
+async function openEditBot(name) {
   _editingBot = name;
   $('#ab-title').textContent = t('bot_settings');
   $('#ab-save').textContent = t('save_bot');
@@ -620,83 +789,78 @@ function openEditBot(name) {
   $('#ab-name').disabled = true;
   $('#ab-name').value = name;
   $('#ab-pass-hint').textContent = t('keep_password');
-  fillForm(c);
   showAdvanced(false);
   $('#addbot-modal').classList.add('show');
+  try {
+    const response = await fetch('/__botconfigs/' + encodeURIComponent(name), { cache: 'no-store' });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) throw new Error(data.message || ('HTTP ' + response.status));
+    fillForm(data.form || {});
+  } catch (e) {
+    toast(e.message, 'err');
+    closeAddBot();
+  }
 }
 
-function closeAddBot() { $('#addbot-modal').classList.remove('show'); _editingBot = null; }
+function closeAddBot() {
+  $('#addbot-modal').classList.remove('show');
+  _editingBot = null;
+}
+
+function botFormFields(name) {
+  return {
+    name,
+    steam_login: $('#ab-login').value.trim(),
+    steam_password: $('#ab-pass').value,
+    enabled: getChk('ab-enabled'),
+    online_status: parseInt($('#ab-online').value, 10),
+    hours_until_cards: parseInt($('#ab-hours').value, 10),
+    hour_max: parseInt($('#ab-hour-max-games').value, 10),
+    farm_paused: getChk('ab-paused'),
+    shutdown_after_farm: getChk('ab-shutdown'),
+    priority_only: getChk('ab-priorityonly'),
+    skip_unplayed: getChk('ab-skipunplayed'),
+    matcher: getChk('ab-matcher'),
+    match_all: getChk('ab-matchall'),
+    accept_donations: getChk('ab-donations'),
+    accept_gifts: getChk('ab-gifts'),
+    match_actively: getChk('ab-matchactively'),
+    no_bot_trades: getChk('ab-nobottrades'),
+    reject_trades: getChk('ab-rejtrades'),
+    reject_friends: getChk('ab-rejfriends'),
+    reject_groups: getChk('ab-rejgroups'),
+    dismiss_notifications: getChk('ab-dismissnotif'),
+    mark_read: getChk('ab-markread'),
+    mark_self: getChk('ab-markself'),
+    no_incoming_trades: getChk('ab-noincoming'),
+    forwarding: getChk('ab-forwarding'),
+    distributing: getChk('ab-distributing'),
+    keep_missing: getChk('ab-keepmissing'),
+    assume_wallet: getChk('ab-assumewallet'),
+    farm_order: parseInt($('#ab-farmorder').value, 10),
+    ui_mode: parseInt($('#ab-uimode').value, 10),
+    device: parseInt($('#ab-device').value, 10),
+    trade_check: parseInt($('#ab-tradecheck').value, 10),
+    send_trade: parseInt($('#ab-sendtrade').value, 10),
+    trade_token: $('#ab-tradetoken').value.trim(),
+    machine: $('#ab-machine').value.trim(),
+    custom_farm: $('#ab-custfarm').value.trim(),
+    custom_idle: $('#ab-custidle').value.trim(),
+    idle_games: $('#ab-idlegames').value.split(',').map(value => parseInt(value.trim(), 10)).filter(value => Number.isFinite(value) && value > 0),
+    parental_code: $('#ab-parental').value.trim(),
+    use_login_keys: getChk('ab-loginkeys'),
+  };
+}
 
 async function saveBot() {
   const name = $('#ab-name').value.trim();
-  const login = $('#ab-login').value.trim();
-  const pass = $('#ab-pass').value;
   if (!name) { toast('Введите имя бота', 'err'); return; }
-  if (!/^[A-Za-z0-9_-]+$/.test(name)) { toast('Имя: только латиница, цифры, _ и -', 'err'); return; }
-
-  let fp = 0, tp = 0, bb = 0, rp = 0;
-  if (getChk('ab-paused')) fp |= FP.paused;
-  if (getChk('ab-shutdown')) fp |= FP.shutdown;
-  if (getChk('ab-priorityonly')) fp |= FP.priorityonly;
-  if (getChk('ab-skipunplayed')) fp |= FP.skipunplayed;
-  if (getChk('ab-matcher')) tp |= TP.matcher;
-  if (getChk('ab-matchall')) tp |= TP.matchall;
-  if (getChk('ab-donations')) tp |= TP.donations;
-  if (getChk('ab-matchactively')) tp |= TP.matchactively;
-  if (getChk('ab-nobottrades')) tp |= TP.nobottrades;
-  if (getChk('ab-rejtrades')) bb |= BB.rejtrades;
-  if (getChk('ab-rejfriends')) bb |= BB.rejfriends;
-  if (getChk('ab-rejgroups')) bb |= BB.rejgroups;
-  if (getChk('ab-dismissnotif')) bb |= BB.dismissnotif;
-  if (getChk('ab-markread')) bb |= BB.markread;
-  if (getChk('ab-markself')) bb |= BB.markself;
-  if (getChk('ab-noincoming')) bb |= BB.noincoming;
-  if (getChk('ab-forwarding')) rp |= RP.forwarding;
-  if (getChk('ab-distributing')) rp |= RP.distributing;
-  if (getChk('ab-keepmissing')) rp |= RP.keepmissing;
-  if (getChk('ab-assumewallet')) rp |= RP.assumewallet;
-
-  const idleGames = $('#ab-idlegames').value.split(',')
-    .map(s => parseInt(s.trim(), 10)).filter(n => Number.isFinite(n) && n > 0);
-
-  const cfg = {
-    Enabled: $('#ab-enabled').checked,
-    OnlineStatus: parseInt($('#ab-online').value, 10),
-    HoursUntilCardDrops: Math.max(0, Math.min(255, parseInt($('#ab-hours').value, 10) || 3)),
-    FarmingPreferences: fp,
-    TradingPreferences: tp,
-    BotBehaviour: bb,
-    RedeemingPreferences: rp,
-    AcceptGifts: getChk('ab-gifts'),
-    UseLoginKeys: getChk('ab-loginkeys'),
-    FarmingOrders: [parseInt($('#ab-farmorder').value, 10)],
-    UserInterfaceMode: parseInt($('#ab-uimode').value, 10),
-    GamingDeviceType: parseInt($('#ab-device').value, 10),
-    TradeCheckPeriod: Math.max(0, Math.min(255, parseInt($('#ab-tradecheck').value, 10) || 60)),
-    SendTradePeriod: Math.max(0, Math.min(255, parseInt($('#ab-sendtrade').value, 10) || 0)),
-    GamesPlayedWhileIdle: idleGames,
-    s_SteamMasterClanID: '103582791475681171',
-    RemoteCommunication: 2,
-  };
-  const token = $('#ab-tradetoken').value.trim();
-  const machine = $('#ab-machine').value.trim();
-  const custFarm = $('#ab-custfarm').value.trim();
-  const custIdle = $('#ab-custidle').value.trim();
-  const parental = $('#ab-parental').value.trim();
-  if (token) cfg.SteamTradeToken = token;
-  if (machine) cfg.MachineName = machine;
-  if (custFarm) cfg.CustomGamePlayedWhileFarming = custFarm;
-  if (custIdle) cfg.CustomGamePlayedWhileIdle = custIdle;
-  if (parental) cfg.SteamParentalCode = parental;
-  if (login) cfg.SteamLogin = login;
-  if (pass) cfg.SteamPassword = pass;
-
   try {
-    await api('/Api/Bot/' + encodeURIComponent(name), {
-      method: 'POST',
-      body: JSON.stringify({ BotConfig: cfg }),
-    });
-    await saveHourFarmMaxForBot(name, $('#ab-hour-max-games').value);
+    const response = await fetch('/__botconfigs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: botFormFields(name) }) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) throw new Error(data.message || ('HTTP ' + response.status));
+    const hourMax = Math.max(1, Math.min(32, parseInt($('#ab-hour-max-games').value, 10) || 32));
+    HOUR_FARM_MAX_BY_BOT[name] = hourMax;
     toast(_editingBot ? ('Сохранено: ' + name) : ('Бот создан: ' + name), 'ok');
     logEvent((_editingBot ? 'Изменён' : 'Создан') + ' бот: ' + name);
     closeAddBot();
@@ -711,7 +875,10 @@ async function deleteBot() {
   if (!_editingBot) return;
   if (!confirm('Удалить бота "' + _editingBot + '"? Конфиг будет удалён.')) return;
   try {
-    await api('/Api/Bot/' + encodeURIComponent(_editingBot), { method: 'DELETE' });
+    const response = await fetch('/__botconfigs/' + encodeURIComponent(_editingBot), { method: 'DELETE' });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) throw new Error(data.message || ('HTTP ' + response.status));
+    delete HOUR_FARM_MAX_BY_BOT[_editingBot];
     toast('Бот удалён: ' + _editingBot, 'ok');
     logEvent('Удалён бот: ' + _editingBot);
     closeAddBot();
@@ -778,13 +945,12 @@ async function refreshASF() {
 }
 
 async function refreshBots() {
-  const r = await api('/Api/Bot/ASF');
-  const bots = r && r.Result ? r.Result : {};
-  renderBots(bots);
-  checkRequiredInput(bots);
-  maybeStartHourFarmOnLaunch(bots);
-  maybeAutoHourFarmAfterCards(bots);
-  maybeReapplyHourFarmAfterReconnect(bots);
+  const response = await fetch('/__bots', { cache: 'no-store' });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.ok) throw new Error(data.message || ('HTTP ' + response.status));
+  renderBots(data.bots || {});
+  await syncLoginRequests();
+  await syncHourFarmState();
 }
 
 const INPUT_TYPES = {
@@ -805,62 +971,67 @@ function inputInfo(type) {
 }
 
 let _guardActive = null;
-const _deferredGuards = new Set();
+let LOGIN_REQUESTS = [];
+let _loginRequestLastEvent = 0;
 
 function guardKey(bot, type) {
   return String(bot) + ':' + String(type);
 }
 
-function pendingGuards(bots = BOTS) {
-  const pending = [];
-  for (const name of Object.keys(bots || {})) {
-    const type = bots[name] && bots[name].RequiredInput;
-    if (type && inputInfo(type)) pending.push({ bot: name, type });
-  }
-  return pending;
+function pendingGuards() {
+  return LOGIN_REQUESTS.slice();
 }
 
-function updateDeferredGuardButton(bots = BOTS) {
+function updateDeferredGuardButton() {
   const button = $('#pending-input-nav');
   if (!button) return;
-  const pending = pendingGuards(bots);
-  const pendingKeys = new Set(pending.map(x => guardKey(x.bot, x.type)));
-  for (const key of Array.from(_deferredGuards)) {
-    if (!pendingKeys.has(key)) _deferredGuards.delete(key);
-  }
-  const hasPending = pending.length > 0;
-  button.classList.toggle('show', hasPending);
-  button.setAttribute('aria-hidden', hasPending ? 'false' : 'true');
+  const pending = pendingGuards();
+  const visible = pending.length > 0;
+  button.classList.toggle('show', visible);
+  button.setAttribute('aria-hidden', visible ? 'false' : 'true');
   button.title = t('input_alert');
   button.setAttribute('aria-label', t('input_alert'));
   const count = $('#pending-input-count');
   if (count) count.textContent = String(pending.length);
 }
 
-function checkRequiredInput(bots) {
-  const pending = pendingGuards(bots);
-  for (const item of pending) {
-    const info = inputInfo(item.type);
-    const key = guardKey(item.bot, item.type);
-    if (!_inputLogged.has(key)) {
-      _inputLogged.add(key);
-      logEvent(tf('input_required_for', { bot: item.bot, value: info.label }));
-    }
+function loginEventText(event) {
+  const key = event && event.key ? event.key : '';
+  const data = event && event.data ? event.data : {};
+  if (key === 'login_request_new') {
+    const info = inputInfo(data.input_type);
+    return tf(key, { bot: data.bot, value: info ? info.label : '' });
   }
-  updateDeferredGuardButton(bots);
-  if (_guardActive) return;
-  const next = pending.find(item => !_deferredGuards.has(guardKey(item.bot, item.type)));
-  if (next) openGuard(next.bot, next.type);
+  const text = t(key);
+  return text === key ? (data.error || key) : tf(key, data) + (data.error ? ': ' + data.error : '');
+}
+
+async function syncLoginRequests() {
+  try {
+    const response = await fetch('/__login_requests/status?since=' + encodeURIComponent(String(_loginRequestLastEvent)), { cache: 'no-store' });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) return;
+    LOGIN_REQUESTS = Array.isArray(data.requests) ? data.requests : [];
+    updateDeferredGuardButton();
+    for (const event of data.events || []) {
+      if (event.id > _loginRequestLastEvent) {
+        _loginRequestLastEvent = event.id;
+        logEvent(loginEventText(event));
+      }
+    }
+    if (data.lastEventId > _loginRequestLastEvent) _loginRequestLastEvent = data.lastEventId;
+    if (_guardActive) return;
+    const next = LOGIN_REQUESTS.find(item => !item.deferred);
+    if (next) openGuard(next.bot, next.type);
+  } catch (e) {}
 }
 
 function openGuard(botName, type) {
   const info = inputInfo(type);
   if (!info) return;
-  _deferredGuards.delete(guardKey(botName, type));
   _guardActive = { bot: botName, type };
   $('#guard-acc').textContent = botName;
   $('#guard-title').textContent = info.title;
-
   if (info.confirm) {
     $('#guard-sub').textContent = t('input_request_for');
     $('#guard-confirm-view').style.display = 'block';
@@ -871,8 +1042,7 @@ function openGuard(botName, type) {
     showGuardCode(type);
   }
   $('#guard-modal').classList.add('show');
-  updateDeferredGuardButton(BOTS);
-  logEvent(tf('input_required', { value: info.confirm ? info.title : info.label, bot: botName }));
+  updateDeferredGuardButton();
 }
 
 function showGuardCode(type) {
@@ -885,31 +1055,35 @@ function showGuardCode(type) {
   $('#guard-code-view').style.display = 'block';
   $('#guard-send').style.display = 'inline-flex';
   $('#guard-bycode').style.display = 'none';
-  const inp = $('#guard-input');
-  inp.value = '';
-  inp.type = (type === 2 || type === 4) ? 'password' : 'text';
-  inp.placeholder = info.ph;
-  inp.style.textTransform = info.upper ? 'uppercase' : 'none';
-  setTimeout(() => inp.focus(), 50);
+  const input = $('#guard-input');
+  input.value = '';
+  input.type = (type === 2 || type === 4) ? 'password' : 'text';
+  input.placeholder = info.ph;
+  input.style.textTransform = info.upper ? 'uppercase' : 'none';
+  setTimeout(() => input.focus(), 50);
 }
 
 function guardByCode() {
   showGuardCode(5);
 }
 
-function deferGuard() {
-  // "Later" silences the whole current batch, not only the open bot. Otherwise
-  // a second pending account would immediately reopen the same modal.
-  pendingGuards(BOTS).forEach(item => _deferredGuards.add(guardKey(item.bot, item.type)));
-  closeGuard();
-  updateDeferredGuardButton(BOTS);
-  toast(t('input_later'), 'ok');
+async function deferGuard() {
+  try {
+    const response = await fetch('/__login_requests/defer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) throw new Error(data.message || ('HTTP ' + response.status));
+    LOGIN_REQUESTS = data.requests || LOGIN_REQUESTS;
+    closeGuard();
+    updateDeferredGuardButton();
+    toast(t('input_later'), 'ok');
+  } catch (e) {
+    toast(e.message, 'err');
+  }
 }
 
 function openDeferredGuard() {
   if (_guardActive) return;
-  const pending = pendingGuards(BOTS);
-  const next = pending.find(item => _deferredGuards.has(guardKey(item.bot, item.type))) || pending[0];
+  const next = LOGIN_REQUESTS.find(item => item.deferred) || LOGIN_REQUESTS[0];
   if (next) openGuard(next.bot, next.type);
 }
 
@@ -922,348 +1096,101 @@ async function sendGuard() {
   if (!_guardActive) return;
   const active = _guardActive;
   const info = inputInfo(active.type) || {};
-  let val = $('#guard-input').value.trim();
-  if (info.upper) val = val.toUpperCase();
-  if (!val) { toast(t('input_value_required'), 'err'); return; }
+  let value = $('#guard-input').value.trim();
+  if (info.upper) value = value.toUpperCase();
+  if (!value) { toast(t('input_value_required'), 'err'); return; }
   try {
-    await api('/Api/Bot/' + encodeURIComponent(active.bot) + '/Input', {
-      method: 'POST',
-      body: JSON.stringify({ Type: active.type, Value: val }),
-    });
-    _deferredGuards.delete(guardKey(active.bot, active.type));
+    const response = await fetch('/__login_requests/input', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bot: active.bot, type: active.type, value }) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) throw new Error(data.message || ('HTTP ' + response.status));
     toast(tf('input_sent', { bot: active.bot }), 'ok');
     logEvent(tf('input_sent', { bot: active.bot }));
     closeGuard();
-    setTimeout(refresh, 1200);
+    setTimeout(refresh, 900);
   } catch (e) {
     toast(e.message, 'err');
   }
 }
 
-let _boosting = false;
-let AUTO_HOUR_FARM = localStorage.getItem('asf_auto_hour_farm_after_cards') === '1';
-let START_HOUR_FARM = localStorage.getItem('asf_start_hour_farm_on_launch') === '1';
-let PRIORITY_HOUR_APPIDS = localStorage.getItem('asf_priority_hour_farm_appids') || '';
-let HOUR_FARM_PRIORITY_MODE = localStorage.getItem('asf_hour_farm_priority_mode') || 'hours_desc';
+let AUTO_HOUR_FARM = false;
+let START_HOUR_FARM = false;
+let PRIORITY_HOUR_APPIDS = '';
+let HOUR_FARM_PRIORITY_MODE = 'hours_desc';
 if (!['hours_asc', 'hours_desc', 'popular'].includes(HOUR_FARM_PRIORITY_MODE)) HOUR_FARM_PRIORITY_MODE = 'hours_desc';
 let HOUR_FARM_MAX_BY_BOT = {};
-try { HOUR_FARM_MAX_BY_BOT = JSON.parse(localStorage.getItem('asf_hour_farm_max_by_bot') || '{}') || {}; } catch (e) { HOUR_FARM_MAX_BY_BOT = {}; }
-let _startupHourDone = false;
-let _startupWaitStarted = 0;
-let _lastStartupWaitLog = 0;
-let _autoHourInitialized = false;
-const _autoHourSeenCardWork = new Set();
-const _autoHourBoosted = new Set();
-const _inputLogged = new Set();
-const _hourReapplyAt = new Map();
-
-function isBotEnabled(bot) {
-  if (!bot) return false;
-  if (bot.Enabled === false) return false;
-  if (bot.BotConfig && bot.BotConfig.Enabled === false) return false;
-  return bot.KeepRunning !== false;
-}
+const _hourFarmGamesByBot = new Map();
+let _hourFarmLastEvent = 0;
 
 function hourFarmMaxForBot(name) {
-  const n = parseInt(HOUR_FARM_MAX_BY_BOT[name], 10);
-  return Number.isFinite(n) ? Math.max(1, Math.min(32, n)) : 32;
+  const value = parseInt(HOUR_FARM_MAX_BY_BOT[name], 10);
+  return Number.isFinite(value) ? Math.max(1, Math.min(32, value)) : 32;
 }
 
-async function saveHourFarmMaxForBot(name, value) {
-  if (!name) return;
-  let n = parseInt(value, 10);
-  if (!Number.isFinite(n)) n = 32;
-  n = Math.max(1, Math.min(32, n));
-  HOUR_FARM_MAX_BY_BOT[name] = n;
-  localStorage.setItem('asf_hour_farm_max_by_bot', JSON.stringify(HOUR_FARM_MAX_BY_BOT));
-  try { await localSettings({ hour_farm_max_games_by_bot: HOUR_FARM_MAX_BY_BOT }); } catch (e) {}
-}
-
-function hasCardWork(bot) {
-  if (!isBotEnabled(bot) || !bot.IsConnectedAndLoggedOn) return false;
-  const cf = bot.CardsFarmer || {};
-  return !!(cf.NowFarming ||
-    (Array.isArray(cf.CurrentGamesFarming) && cf.CurrentGamesFarming.length > 0) ||
-    (Array.isArray(cf.GamesToFarm) && cf.GamesToFarm.length > 0));
-}
-
-function isFarmedIdle(bot) {
-  if (!isBotEnabled(bot) || !bot.IsConnectedAndLoggedOn) return false;
-  const cf = bot.CardsFarmer || {};
-  const farming = (cf.CurrentGamesFarming || []).length > 0;
-  const toFarm = Array.isArray(cf.GamesToFarm) ? cf.GamesToFarm.length : 0;
-  return !farming && toFarm === 0;
-}
 
 function parseAppIDsText(text) {
   const seen = new Set();
-  const out = [];
-  String(text || '').split(/[^0-9]+/).forEach(x => {
-    if (!x) return;
-    const id = parseInt(x, 10);
-    if (Number.isFinite(id) && id > 0 && !seen.has(id)) {
-      seen.add(id);
-      out.push(id);
+  const result = [];
+  String(text || '').split(/[^0-9]+/).forEach(value => {
+    const appid = parseInt(value, 10);
+    if (Number.isFinite(appid) && appid > 0 && !seen.has(appid)) {
+      seen.add(appid);
+      result.push(appid);
     }
   });
-  return out;
+  return result;
 }
 
 function normalizeAppIDsText(text) {
   return parseAppIDsText(text).join(', ');
 }
 
-async function fetchGames(steamid, limit = 32) {
-  const g = await api('/__games?steamid=' + steamid + '&limit=' + encodeURIComponent(String(limit)), { timeout: 20000 });
-  return g || {};
+function hourFarmEventText(event) {
+  const data = event && event.data ? event.data : {};
+  const key = event && event.key ? event.key : '';
+  const text = t(key);
+  if (text !== key) return tf(key, data) + (data.error ? ': ' + data.error : '');
+  return data.error || key;
 }
 
-let _popularGames = null;
-let _popularGamesAt = 0;
-async function fetchPopularGames() {
-  if (_popularGames && Date.now() - _popularGamesAt < 10 * 60 * 1000) return _popularGames;
-  const r = await fetch('/__popular_games', { cache: 'no-store' });
-  const d = await r.json().catch(() => ({}));
-  if (!r.ok || !d.ok || !Array.isArray(d.games)) throw new Error(d.message || 'Steam popularity list unavailable');
-  _popularGames = d.games;
-  _popularGamesAt = Date.now();
-  return _popularGames;
+async function syncHourFarmState() {
+  try {
+    const response = await fetch('/__hourfarm/status?since=' + encodeURIComponent(String(_hourFarmLastEvent)), { cache: 'no-store' });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) return;
+    _hourFarmGamesByBot.clear();
+    for (const [name, appids] of Object.entries(data.active || {})) {
+      if (Array.isArray(appids)) _hourFarmGamesByBot.set(name, appids.map(Number).filter(x => Number.isFinite(x) && x > 0));
+    }
+    for (const event of data.events || []) {
+      if (event.id > _hourFarmLastEvent) {
+        _hourFarmLastEvent = event.id;
+        logEvent(hourFarmEventText(event));
+      }
+    }
+    if (data.lastEventId > _hourFarmLastEvent) _hourFarmLastEvent = data.lastEventId;
+    if (_openBotDetails) renderBotDetails();
+  } catch (e) {}
 }
 
-async function boostHours(options = {}) {
-  if (_boosting) return;
-  _boosting = true;
+async function startHourFarm() {
   const fab = $('#boost-fab');
   fab.classList.add('busy');
   try {
-    const r = await api('/Api/Bot/ASF');
-    const bots = r && r.Result ? r.Result : {};
-    const only = options.targets ? new Set(options.targets) : null;
-    const targets = Object.keys(bots).filter(n => isFarmedIdle(bots[n]) && (!only || only.has(n)));
-    if (!targets.length) {
-      toast('Нет аккаунтов с отфармленными карточками', 'err');
-      logEvent('Буст часов: подходящих аккаунтов нет.');
-      return;
-    }
-    logEvent('Буст часов: аккаунтов ' + targets.length);
-
-    const priorityInput = $('#set-priority-hour-games');
-    if (priorityInput) {
-      PRIORITY_HOUR_APPIDS = normalizeAppIDsText(priorityInput.value || PRIORITY_HOUR_APPIDS);
-      priorityInput.value = PRIORITY_HOUR_APPIDS;
-      localStorage.setItem('asf_priority_hour_farm_appids', PRIORITY_HOUR_APPIDS);
-      localSettings({ priority_hour_farm_appids: PRIORITY_HOUR_APPIDS }).catch(() => {});
-    }
-    const priority = parseAppIDsText(PRIORITY_HOUR_APPIDS);
-    const priorityMode = ['hours_asc', 'hours_desc', 'popular'].includes(HOUR_FARM_PRIORITY_MODE) ? HOUR_FARM_PRIORITY_MODE : 'hours_desc';
-    if (priority.length) logEvent('Буст часов: приоритетные AppID: ' + priority.join(', '));
-    if (priorityMode === 'popular') logEvent('Буст часов: ' + t('popular_loading'));
-
-    let needKey = false;
-    const ownedByBot = {};
-    const ownedSetByBot = {};
-
-    for (const name of targets) {
-      const sid = bots[name].s_SteamID || (bots[name].SteamID != null ? String(bots[name].SteamID) : '');
-      if (!sid || sid === '0') { logEvent(name + ': нет SteamID, пропуск'); continue; }
-      let res = {};
-      try { res = await fetchGames(sid, (priority.length || priorityMode !== 'hours_desc') ? 50000 : 32); }
-      catch (e) { logEvent(name + ': ошибка запроса игр (' + e.message + ')'); continue; }
-
-      if (res.needKey || res.error === 'bad_key' || res.error === 'no_api_key') { needKey = true; break; }
-      if (res.error === 'private') {
-        logEvent(name + ': ' + (res.message || 'игры скрыты приватностью') + ' — пропуск');
-        continue;
-      }
-      if (res.error) {
-        logEvent(name + ': ' + (res.message || res.error) + ' — пропуск');
-        continue;
-      }
-      const games = (res.games || []).filter(x => x && x.appID).map(x => ({
-        appID: Number(x.appID), hours: Number(x.hours || 0),
-      })).filter(x => Number.isFinite(x.appID) && x.appID > 0);
-      if (!games.length) {
-        logEvent(name + ': в библиотеке нет игр, пропуск');
-        continue;
-      }
-      ownedByBot[name] = games;
-      ownedSetByBot[name] = new Set(games.map(x => x.appID));
-    }
-
-    if (needKey) {
-      toast('Проверьте Steam API ключ', 'err');
-      logEvent('Нужен корректный Steam Web API ключ.');
-      openApiKeyModal();
-      return;
-    }
-
-    const usableTargets = targets.filter(n => ownedByBot[n]);
-    if (!usableTargets.length) {
-      toast('Игры не найдены ни на одном аккаунте', 'err');
-      return;
-    }
-
-    let popularIDs = [];
-    if (priorityMode === 'popular') {
-      try {
-        popularIDs = (await fetchPopularGames()).map(x => Number(x.appID)).filter(x => Number.isFinite(x) && x > 0);
-      } catch (e) {
-        logEvent(t('popular_unavailable'));
-        toast(t('popular_unavailable'), 'err');
-      }
-    }
-
-    let done = 0;
-    const assignedPopular = new Set();
-    for (const name of usableTargets) {
-      // Explicit AppIDs remain per-account priorities in every ordering mode.
-      const ownedSet = ownedSetByBot[name];
-      const maxGames = hourFarmMaxForBot(name);
-      const priorityOwned = priority.filter(appid => ownedSet.has(appid)).slice(0, maxGames);
-      const selected = [...priorityOwned];
-      const selectedSet = new Set(selected);
-      const orderedOwned = ownedByBot[name].slice().sort((a, b) => {
-        if (priorityMode === 'hours_asc') return a.hours - b.hours || a.appID - b.appID;
-        return b.hours - a.hours || a.appID - b.appID;
-      }).map(x => x.appID);
-      // Popular mode takes ranked Steam games first. Each following account gets
-      // the next still unused list; only then does it fall back to its hour order.
-      const candidates = priorityMode === 'popular' && popularIDs.length
-        ? popularIDs.filter(appid => ownedSet.has(appid) && !assignedPopular.has(appid)).concat(orderedOwned)
-        : orderedOwned;
-
-      for (const appid of candidates) {
-        if (selected.length >= maxGames) break;
-        if (selectedSet.has(appid)) continue;
-        selected.push(appid);
-        selectedSet.add(appid);
-        if (priorityMode === 'popular' && popularIDs.includes(appid)) assignedPopular.add(appid);
-      }
-
-      if (!selected.length) {
-        logEvent(name + ': нет игр для запуска, пропуск');
-        continue;
-      }
-      try {
-        await api('/Api/Command', {
-          method: 'POST',
-          body: JSON.stringify({ Command: 'play ' + name + ' ' + selected.join(',') }),
-        });
-        done++;
-        _autoHourBoosted.add(name);
-        _hourReapplyAt.set(name, Date.now() + 10 * 60 * 1000);
-        if (priority.length) {
-          const missing = priority.filter(appid => !ownedSet.has(appid));
-          if (missing.length) logEvent(name + ': нет приоритетных игр ' + missing.join(', ') + ' — пропуск для этого аккаунта');
-        }
-        logEvent(name + ': запущено ' + selected.length + ' игр' + (priorityOwned.length ? ' (приоритетных: ' + priorityOwned.length + ')' : ''));
-      } catch (e) { logEvent(name + ': ошибка play (' + e.message + ')'); }
-    }
-
-    toast(done ? ('Запущено на ' + done + ' акк.') : 'Игры не запущены (см. Журнал)', done ? 'ok' : 'err');
+    const response = await fetch('/__hourfarm/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) throw new Error(data.message || ('HTTP ' + response.status));
+    await syncHourFarmState();
   } catch (e) {
     toast(e.message, 'err');
+    logEvent(e.message);
   } finally {
-    _boosting = false;
     fab.classList.remove('busy');
-    setTimeout(refresh, 1500);
+    setTimeout(refresh, 800);
   }
-}
-
-function botInitState(bots) {
-  const names = Object.keys(bots || {}).filter(n => isBotEnabled(bots[n]));
-  const pending = [];
-  const failed = [];
-  const ready = [];
-  for (const n of names) {
-    const b = bots[n];
-    if (b.RequiredInput) failed.push(n);
-    else if (b.IsConnectedAndLoggedOn) ready.push(n);
-    else pending.push(n);
-  }
-  return { names, pending, failed, ready };
-}
-
-function maybeStartHourFarmOnLaunch(bots) {
-  if (!START_HOUR_FARM || _startupHourDone || _boosting || !bots) return;
-  const st = botInitState(bots);
-  if (!_startupWaitStarted) _startupWaitStarted = Date.now();
-  const waited = Date.now() - _startupWaitStarted;
-  const timeoutMs = 180000;
-
-  if (st.failed.length) {
-    for (const n of st.failed) logEvent('Фарм часов при запуске: ' + n + ' пропущен, вход не завершён.');
-  }
-
-  if (st.pending.length && waited < timeoutMs) {
-    if (Date.now() - _lastStartupWaitLog > 15000) {
-      _lastStartupWaitLog = Date.now();
-      logEvent('Фарм часов при запуске: жду инициализацию ботов (' + st.pending.join(', ') + ')');
-    }
-    return;
-  }
-
-  _startupHourDone = true;
-  const targets = st.ready.filter(n => isFarmedIdle(bots[n]));
-  if (!targets.length) {
-    logEvent('Фарм часов при запуске: подходящих аккаунтов нет.');
-    return;
-  }
-  targets.forEach(n => {
-    _autoHourBoosted.add(n);
-    _hourReapplyAt.set(n, Date.now() + 10 * 60 * 1000);
-  });
-  logEvent('Фарм часов при запуске: аккаунтов ' + targets.length);
-  setTimeout(() => boostHours({ targets, startup: true }), 700);
-}
-
-
-function maybeAutoHourFarmAfterCards(bots) {
-  if (!AUTO_HOUR_FARM || _boosting || !bots) return;
-  const names = Object.keys(bots);
-
-  // First pass only arms the automation. BetterASF will not start hour boosting
-  // immediately on startup if accounts were already farmed before UI launch.
-  if (!_autoHourInitialized) {
-    for (const n of names) {
-      if (hasCardWork(bots[n])) _autoHourSeenCardWork.add(n);
-      else if (isFarmedIdle(bots[n])) _autoHourBoosted.add(n);
-    }
-    _autoHourInitialized = true;
-    return;
-  }
-
-  for (const n of names) {
-    if (hasCardWork(bots[n])) {
-      _autoHourSeenCardWork.add(n);
-      _autoHourBoosted.delete(n);
-    }
-  }
-
-  const ready = names.filter(n => isFarmedIdle(bots[n]) && _autoHourSeenCardWork.has(n) && !_autoHourBoosted.has(n));
-  if (!ready.length) return;
-
-  ready.forEach(n => _autoHourBoosted.add(n));
-  logEvent('Автофарм часов: обычный фарм закончился для ' + ready.join(', '));
-  toast('Обычный фарм завершён, запускаю фарм часов', 'ok');
-  setTimeout(() => boostHours({ targets: ready, auto: true }), 500);
-}
-
-function maybeReapplyHourFarmAfterReconnect(bots) {
-  if ((!START_HOUR_FARM && !AUTO_HOUR_FARM) || _boosting || !bots) return;
-  const now = Date.now();
-  const ready = [];
-  for (const n of Object.keys(bots)) {
-    if (!isFarmedIdle(bots[n])) continue;
-    if (!_autoHourBoosted.has(n)) continue;
-    const next = _hourReapplyAt.get(n) || 0;
-    if (now < next) continue;
-    ready.push(n);
-    _hourReapplyAt.set(n, now + 10 * 60 * 1000);
-  }
-  if (!ready.length) return;
-  logEvent('Проверка фарма часов после восстановления связи: ' + ready.join(', '));
-  setTimeout(() => boostHours({ targets: ready, reapply: true }), 500);
 }
 
 function openApiKeyModal() {
@@ -1282,7 +1209,7 @@ async function saveApiKey() {
   } catch (e) { toast('Не удалось сохранить ключ: ' + e.message, 'err'); return; }
   toast('Ключ сохранён', 'ok');
   closeApiKeyModal();
-  setTimeout(boostHours, 400);
+  setTimeout(startHourFarm, 400);
 }
 
 let _refreshing = false;
@@ -1416,8 +1343,6 @@ function mergeLoadedPluginNames(items, loaded) {
       const actual = pluginIdentity(asfPluginName(plugin));
       return actual && signatures.some(value => actual === value || actual.includes(value) || value.includes(actual));
     });
-    // ASF's IPlugin.Name is authoritative. The Python backend provides a
-    // well-known assembly-name fallback for bundled official plugins.
     return Object.assign({}, item, {
       displayName: asfPluginName(match) || item.name || t('plugin_unknown'),
       loadedVersion: asfPluginVersion(match),
@@ -1434,11 +1359,16 @@ function pluginVersionText(value) {
   return String(value);
 }
 
+function pluginTitleHTML(name, dotClass = '') {
+  const safe = escapeHtml(name || t('plugin_unknown'));
+  return `<div class="plugin-name"><span class="dot ${dotClass}"></span><span class="plugin-title-label" title="${safe}">${safe}</span></div>`;
+}
+
 function renderPluginLibrary(items) {
   const box = $('#plugins-list');
   if (!items.length) { box.innerHTML = `<div class="empty">${t('plugin_empty')}</div>`; return; }
   box.innerHTML = items.map(p => `<div class="plugin-card plugin-card--library">
-    <div class="plugin-card-top"><div class="plugin-name"><span class="dot ${p.isLoaded ? 'online' : 'offline'}"></span>${escapeHtml(p.displayName || p.name || t('plugin_unknown'))}</div></div>
+    <div class="plugin-card-top">${pluginTitleHTML(p.displayName || p.name || t('plugin_unknown'), p.isLoaded ? 'online' : 'offline')}</div>
     <div class="plugin-ver">${p.loadedVersion ? `${t('plugin_version')}: ${escapeHtml(pluginVersionText(p.loadedVersion))} · ` : ''}${t('plugin_files')}: ${Number(p.files || 0)} · ${t('plugin_size')}: ${formatBytes(p.size)}</div>
     <div class="plugin-actions"><button class="btn sm danger plugin-remove-btn" type="button" data-plugin-directory="${escapeHtml(p.directory)}" data-plugin-name="${escapeHtml(p.displayName || p.name || p.directory)}">${t('remove')}</button></div>
   </div>`).join('');
@@ -1458,7 +1388,6 @@ async function loadPluginLibrary() {
       const asf = await api('/Api/Plugins?official=true&custom=true');
       loaded = asf && Array.isArray(asf.Result) ? asf.Result : [];
     } catch (e) {
-      // The filesystem library remains available while ASF starts or restarts.
     }
     renderPluginLibrary(mergeLoadedPluginNames(d.items || [], loaded));
   } catch (e) {
@@ -1469,7 +1398,7 @@ async function loadPluginLibrary() {
 function renderPluginStore(items) {
   const box = $('#plugins-store-list');
   box.innerHTML = items.map(p => `<div class="plugin-card plugin-card--store">
-    <div class="plugin-card-top"><div class="plugin-name"><span class="dot online"></span>${escapeHtml(p.name || 'Plugin')}</div><span class="plugin-badge">GitHub</span></div>
+    <div class="plugin-card-top">${pluginTitleHTML(p.name || t('plugin_unknown'), 'online')}<span class="plugin-badge">GitHub</span></div>
     <p class="plugin-description">${escapeHtml(p.description || '')}</p>
     <div class="plugin-meta">${t('plugin_version')}: ${escapeHtml(String(p.version || '—'))} · ${t('plugin_author')}: ${escapeHtml(p.author || '—')}</div>
     <div class="plugin-actions"><a class="btn sm ghost plugin-source-link" href="${escapeHtml(p.repositoryUrl || '#')}" target="_blank" rel="noopener">${t('plugin_source')}</a>
@@ -1550,43 +1479,89 @@ async function customThemeRequest(payload) {
   const options = payload === undefined
     ? { method: 'GET', cache: 'no-store' }
     : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) };
-  const response = await fetch('/__custom_theme', options);
+  const response = await fetch('/__theme', options);
   const data = await response.json().catch(() => ({}));
   if (!response.ok || data.ok === false) throw new Error(data.message || ('HTTP ' + response.status));
   return data;
 }
 
-function setCustomThemePreview(url) {
-  const preview = $('#custom-theme-preview');
-  if (!preview) return;
-  if (url) {
-    preview.style.backgroundImage = `url("${String(url).replace(/"/g, '%22')}")`;
-    preview.classList.add('show');
-    preview.setAttribute('aria-hidden', 'false');
-  } else {
-    preview.style.backgroundImage = '';
-    preview.classList.remove('show');
-    preview.setAttribute('aria-hidden', 'true');
-  }
+function customThemeMediaType(file) {
+  const type = String(file && file.type || '').toLowerCase();
+  if (type === 'video/mp4' || type === 'video/webm') return 'video';
+  if (['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(type)) return 'image';
+  const name = String(file && file.name || '').toLowerCase();
+  if (/\.(mp4|webm)$/.test(name)) return 'video';
+  if (/\.(png|jpe?g|webp|gif)$/.test(name)) return 'image';
+  return '';
 }
 
-function applyFullTheme(theme) {
+function setCustomThemePreview(url, mediaType = '') {
+  const preview = $('#custom-theme-preview');
+  if (!preview) return;
+  preview.innerHTML = '';
+  preview.style.backgroundImage = '';
+  if (!url) {
+    preview.classList.remove('show');
+    preview.setAttribute('aria-hidden', 'true');
+    return;
+  }
+  if (mediaType === 'video') {
+    const video = document.createElement('video');
+    video.src = url;
+    video.autoplay = true;
+    video.muted = true;
+    video.loop = true;
+    video.playsInline = true;
+    preview.appendChild(video);
+    video.play().catch(() => {});
+  } else {
+    preview.style.backgroundImage = `url("${String(url).replace(/"/g, '%22')}")`;
+  }
+  preview.classList.add('show');
+  preview.setAttribute('aria-hidden', 'false');
+}
+
+function setCustomThemeVideo(url) {
+  const video = $('#custom-theme-video');
+  if (!video) return;
+  if (!url) {
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+    video.classList.remove('show');
+    return;
+  }
+  if (video.getAttribute('src') !== url) {
+    video.src = url;
+    video.load();
+  }
+  video.classList.add('show');
+  video.play().catch(() => {});
+}
+
+function applyFullTheme(theme, persist = true) {
+  CURRENT_FULL_THEME = theme;
   const isCustom = theme === 'custom';
   const isDark = isCustom ? CUSTOM_THEME.base !== 'light' : (theme === 'dark' || theme === 'dark-img');
   document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+  const customVideo = isCustom && CUSTOM_THEME.mediaType === 'video' && CUSTOM_THEME.mediaUrl;
+  const customImage = isCustom && CUSTOM_THEME.mediaType !== 'video' && CUSTOM_THEME.mediaUrl;
 
   if (theme === 'dark-img') {
     document.documentElement.setAttribute('data-bg-theme', 'dark-img');
   } else if (theme === 'light-img') {
     document.documentElement.setAttribute('data-bg-theme', 'light-img');
-  } else if (isCustom && CUSTOM_THEME.imageUrl) {
+  } else if (customVideo) {
+    document.documentElement.setAttribute('data-bg-theme', 'custom-video');
+  } else if (customImage) {
     document.documentElement.setAttribute('data-bg-theme', 'custom-img');
-    document.documentElement.style.setProperty('--custom-theme-image', `url("${String(CUSTOM_THEME.imageUrl).replace(/"/g, '%22')}")`);
+    document.documentElement.style.setProperty('--custom-theme-image', `url("${String(CUSTOM_THEME.mediaUrl).replace(/"/g, '%22')}")`);
   } else {
     document.documentElement.removeAttribute('data-bg-theme');
     document.documentElement.style.removeProperty('--custom-theme-image');
   }
 
+  setCustomThemeVideo(customVideo ? CUSTOM_THEME.mediaUrl : '');
   if (isCustom && CUSTOM_THEME.transparent) document.documentElement.setAttribute('data-custom-transparent', '1');
   else document.documentElement.removeAttribute('data-custom-transparent');
 
@@ -1594,20 +1569,11 @@ function applyFullTheme(theme) {
   if (moon) moon.style.display = isDark ? 'none' : 'inline';
   const sun = $('.ico-sun');
   if (sun) sun.style.display = isDark ? 'inline' : 'none';
-
-  localStorage.setItem('asf_full_theme', theme);
-  localStorage.setItem('asf_theme', isDark ? 'dark' : 'light');
-
-  $$('.theme-option-card').forEach(card => {
-    card.classList.toggle('active', card.getAttribute('data-theme-val') === theme);
-  });
-
-  const select = $('#settings-theme-select');
-  if (select) select.value = theme;
-
+  $$('.theme-option-card').forEach(card => card.classList.toggle('active', card.getAttribute('data-theme-val') === theme));
   if (window.pywebview && window.pywebview.api && window.pywebview.api.set_theme) {
     try { window.pywebview.api.set_theme(isDark ? 'dark' : 'light'); } catch (e) {}
   }
+  if (persist) localSettings({ theme_full: theme }).catch(() => {});
 }
 
 async function loadCustomTheme() {
@@ -1616,10 +1582,11 @@ async function loadCustomTheme() {
     CUSTOM_THEME = {
       base: state.base === 'light' ? 'light' : 'dark',
       transparent: !!state.transparent,
-      imageUrl: state.imageUrl || '',
-      hasImage: !!state.hasImage,
+      mediaUrl: state.mediaUrl || state.imageUrl || '',
+      mediaType: state.mediaType || 'image',
+      hasMedia: !!(state.hasMedia || state.hasImage),
     };
-    if ((localStorage.getItem('asf_full_theme') || '') === 'custom') applyFullTheme('custom');
+    if (CURRENT_FULL_THEME === 'custom') applyFullTheme('custom', false);
     return CUSTOM_THEME;
   } catch (e) {
     return CUSTOM_THEME;
@@ -1627,49 +1594,50 @@ async function loadCustomTheme() {
 }
 
 async function openCustomThemeModal() {
-  CUSTOM_THEME_PREVIOUS_SELECTION = localStorage.getItem('asf_full_theme') || 'dark';
   await loadCustomTheme();
-  CUSTOM_THEME_PENDING_IMAGE = '';
-  CUSTOM_THEME_REMOVE_IMAGE = false;
+  CUSTOM_THEME_PENDING_MEDIA = '';
+  CUSTOM_THEME_PENDING_MEDIA_TYPE = '';
+  CUSTOM_THEME_REMOVE_MEDIA = false;
   const base = CUSTOM_THEME.base === 'light' ? 'light' : 'dark';
   const radio = $(`input[name="custom-theme-base"][value="${base}"]`);
   if (radio) radio.checked = true;
   $('#custom-theme-transparent').checked = !!CUSTOM_THEME.transparent;
   $('#custom-theme-file').value = '';
-  setCustomThemePreview(CUSTOM_THEME.imageUrl);
+  $('#custom-theme-file-note').textContent = t('custom_theme_image_hint');
+  setCustomThemePreview(CUSTOM_THEME.mediaUrl, CUSTOM_THEME.mediaType);
   $('#custom-theme-modal').classList.add('show');
   $('#custom-theme-modal').setAttribute('aria-hidden', 'false');
 }
 
-function closeCustomThemeModal(restoreSelection = true) {
+function closeCustomThemeModal() {
   $('#custom-theme-modal').classList.remove('show');
-  if (restoreSelection) {
-    const select = $('#settings-theme-select');
-    if (select) select.value = CUSTOM_THEME_PREVIOUS_SELECTION;
-  }
   $('#custom-theme-modal').setAttribute('aria-hidden', 'true');
-  CUSTOM_THEME_PENDING_IMAGE = '';
-  CUSTOM_THEME_REMOVE_IMAGE = false;
+  CUSTOM_THEME_PENDING_MEDIA = '';
+  CUSTOM_THEME_PENDING_MEDIA_TYPE = '';
+  CUSTOM_THEME_REMOVE_MEDIA = false;
 }
 
 function readCustomThemeImage(file) {
   if (!file) return;
-  if (file.size > 12 * 1024 * 1024) {
-    toast(t('custom_theme_image_too_large'), 'err');
+  const mediaType = customThemeMediaType(file);
+  const limit = mediaType === 'video' ? 50 * 1024 * 1024 : 12 * 1024 * 1024;
+  if (!mediaType) {
+    toast(t('custom_theme_image_invalid'), 'err');
     $('#custom-theme-file').value = '';
     return;
   }
-  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
-    toast(t('custom_theme_image_invalid'), 'err');
+  if (file.size > limit) {
+    toast(t('custom_theme_image_too_large'), 'err');
     $('#custom-theme-file').value = '';
     return;
   }
   const reader = new FileReader();
   reader.onerror = () => toast(t('custom_theme_image_invalid'), 'err');
   reader.onload = () => {
-    CUSTOM_THEME_PENDING_IMAGE = String(reader.result || '');
-    CUSTOM_THEME_REMOVE_IMAGE = false;
-    setCustomThemePreview(CUSTOM_THEME_PENDING_IMAGE);
+    CUSTOM_THEME_PENDING_MEDIA = String(reader.result || '');
+    CUSTOM_THEME_PENDING_MEDIA_TYPE = mediaType;
+    CUSTOM_THEME_REMOVE_MEDIA = false;
+    setCustomThemePreview(CUSTOM_THEME_PENDING_MEDIA, mediaType);
     $('#custom-theme-file-note').textContent = t('custom_theme_image_loaded') + ': ' + file.name;
   };
   reader.readAsDataURL(file);
@@ -1678,23 +1646,20 @@ function readCustomThemeImage(file) {
 async function saveCustomTheme() {
   const button = $('#custom-theme-save');
   const base = ($('input[name="custom-theme-base"]:checked') || {}).value === 'light' ? 'light' : 'dark';
-  const payload = {
-    base,
-    transparent: !!$('#custom-theme-transparent').checked,
-    removeImage: CUSTOM_THEME_REMOVE_IMAGE,
-  };
-  if (CUSTOM_THEME_PENDING_IMAGE) payload.imageData = CUSTOM_THEME_PENDING_IMAGE;
+  const payload = { base, transparent: !!$('#custom-theme-transparent').checked, removeImage: CUSTOM_THEME_REMOVE_MEDIA };
+  if (CUSTOM_THEME_PENDING_MEDIA) payload.imageData = CUSTOM_THEME_PENDING_MEDIA;
   button.disabled = true;
   try {
     const state = await customThemeRequest(payload);
     CUSTOM_THEME = {
       base: state.base === 'light' ? 'light' : 'dark',
       transparent: !!state.transparent,
-      imageUrl: state.imageUrl || '',
-      hasImage: !!state.hasImage,
+      mediaUrl: state.mediaUrl || '',
+      mediaType: state.mediaType || 'image',
+      hasMedia: !!state.hasMedia,
     };
     applyFullTheme('custom');
-    closeCustomThemeModal(false);
+    closeCustomThemeModal();
     toast(t('custom_theme_saved'), 'ok');
   } catch (e) {
     toast(t('custom_theme_error') + ': ' + e.message, 'err');
@@ -1720,10 +1685,15 @@ function setRefreshInterval() {
   pollTimer = setInterval(refresh, ECONOMY_MODE ? 15000 : 5000);
 }
 
+function applySidebarCollapsed(collapsed, persist = true) {
+  SIDEBAR_COLLAPSED = !!collapsed;
+  document.documentElement.setAttribute('data-sidebar', SIDEBAR_COLLAPSED ? 'collapsed' : 'expanded');
+  if (persist) localSettings({ sidebar_collapsed: SIDEBAR_COLLAPSED }).catch(() => {});
+}
+
 function applyEconomyMode(enabled, rerender = true) {
   ECONOMY_MODE = !!enabled;
   document.documentElement.setAttribute('data-economy', ECONOMY_MODE ? '1' : '0');
-  localStorage.setItem('asf_economy_mode', ECONOMY_MODE ? '1' : '0');
   const toggle = $('#set-economy-mode');
   if (toggle) toggle.checked = ECONOMY_MODE;
   setRefreshInterval();
@@ -1731,13 +1701,8 @@ function applyEconomyMode(enabled, rerender = true) {
 }
 
 async function loadAppSettings() {
-  const a = bridge();
-  let st = {};
-  if (a && a.get_settings) {
-    try { st = await a.get_settings(); } catch (e) {}
-  } else {
-    try { st = await localSettings(); } catch (e) {}
-  }
+  let settings = {};
+  try { settings = await localSettings(); } catch (e) {}
   const tray = $('#set-minimize-tray');
   const auto = $('#set-autostart');
   const autoHour = $('#set-auto-hour-farm');
@@ -1746,57 +1711,36 @@ async function loadAppSettings() {
   const language = $('#set-language');
   const priorityMode = $('#set-hour-farm-priority-mode');
   const launchMin = $('#set-launch-minimized');
-  if (tray) tray.checked = !!st.minimize_to_tray;
-  if (auto) auto.checked = !!st.autostart;
-  if (autoHour) {
-    AUTO_HOUR_FARM = !!st.auto_hour_farm_after_cards;
-    autoHour.checked = AUTO_HOUR_FARM;
-    localStorage.setItem('asf_auto_hour_farm_after_cards', AUTO_HOUR_FARM ? '1' : '0');
-  }
-  if (startHour) {
-    START_HOUR_FARM = !!st.start_hour_farm_on_launch;
-    startHour.checked = START_HOUR_FARM;
-    localStorage.setItem('asf_start_hour_farm_on_launch', START_HOUR_FARM ? '1' : '0');
-  }
-  if (st.hour_farm_max_games_by_bot && typeof st.hour_farm_max_games_by_bot === 'object') {
-    HOUR_FARM_MAX_BY_BOT = st.hour_farm_max_games_by_bot;
-    localStorage.setItem('asf_hour_farm_max_by_bot', JSON.stringify(HOUR_FARM_MAX_BY_BOT));
-  }
+  if (tray) tray.checked = !!settings.minimize_to_tray;
+  if (auto) auto.checked = !!settings.autostart;
+  AUTO_HOUR_FARM = !!settings.auto_hour_farm_after_cards;
+  START_HOUR_FARM = !!settings.start_hour_farm_on_launch;
+  if (autoHour) autoHour.checked = AUTO_HOUR_FARM;
+  if (startHour) startHour.checked = START_HOUR_FARM;
+  if (settings.hour_farm_max_games_by_bot && typeof settings.hour_farm_max_games_by_bot === 'object') HOUR_FARM_MAX_BY_BOT = settings.hour_farm_max_games_by_bot;
   if (priorityInput) {
-    PRIORITY_HOUR_APPIDS = st.priority_hour_farm_appids || localStorage.getItem('asf_priority_hour_farm_appids') || '';
-    PRIORITY_HOUR_APPIDS = normalizeAppIDsText(PRIORITY_HOUR_APPIDS);
+    PRIORITY_HOUR_APPIDS = normalizeAppIDsText(settings.priority_hour_farm_appids || '');
     priorityInput.value = PRIORITY_HOUR_APPIDS;
-    localStorage.setItem('asf_priority_hour_farm_appids', PRIORITY_HOUR_APPIDS);
   }
-  if (language) {
-    const savedLanguage = ['ru', 'en', 'uk'].includes(st.language) ? st.language : UI_LANGUAGE;
-    applyLanguage(savedLanguage, true);
-    language.value = savedLanguage;
-  }
-  if (priorityMode) {
-    HOUR_FARM_PRIORITY_MODE = ['hours_asc', 'hours_desc', 'popular'].includes(st.hour_farm_priority_mode) ? st.hour_farm_priority_mode : HOUR_FARM_PRIORITY_MODE;
-    priorityMode.value = HOUR_FARM_PRIORITY_MODE;
-    localStorage.setItem('asf_hour_farm_priority_mode', HOUR_FARM_PRIORITY_MODE);
-  }
-  if (launchMin) launchMin.checked = !!st.launch_minimized;
-  if (Object.prototype.hasOwnProperty.call(st, 'economy_mode')) {
-    applyEconomyMode(!!st.economy_mode, true);
-  }
+  const savedLanguage = ['ru', 'en', 'uk'].includes(settings.language) ? settings.language : 'ru';
+  applyLanguage(savedLanguage, false);
+  if (language) language.value = savedLanguage;
+  HOUR_FARM_PRIORITY_MODE = ['hours_asc', 'hours_desc', 'popular'].includes(settings.hour_farm_priority_mode) ? settings.hour_farm_priority_mode : 'hours_desc';
+  if (priorityMode) priorityMode.value = HOUR_FARM_PRIORITY_MODE;
+  if (launchMin) launchMin.checked = !!settings.launch_minimized;
+  applySidebarCollapsed(!!settings.sidebar_collapsed, false);
+  applyEconomyMode(!!settings.economy_mode, true);
+  applyFullTheme(settings.theme_full || CFG.theme || 'dark', false);
+  loadServiceData();
 }
 
 async function saveAppSetting(key, value) {
-  const a = bridge();
   try {
-    let ok = true;
-    if (a && a.set_app_setting) {
-      ok = await a.set_app_setting(key, !!value);
-    } else {
-      const r = await localSettings({ [key]: !!value });
-      ok = r.ok !== false;
-    }
+    const result = await localSettings({ [key]: value });
+    const ok = result.ok !== false;
     if (ok && key === 'economy_mode') applyEconomyMode(!!value, true);
     toast(ok ? t('setting_saved') : t('settings_error'), ok ? 'ok' : 'err');
-    return !!ok;
+    return ok;
   } catch (e) {
     toast(t('settings_error') + ': ' + e.message, 'err');
     return false;
@@ -1809,7 +1753,6 @@ async function savePriorityHourGames() {
   const normalized = normalizeAppIDsText(input.value);
   input.value = normalized;
   PRIORITY_HOUR_APPIDS = normalized;
-  localStorage.setItem('asf_priority_hour_farm_appids', normalized);
   try {
     const r = await localSettings({ priority_hour_farm_appids: normalized });
     const ok = r.ok !== false;
@@ -1834,6 +1777,64 @@ async function runAsfActionButton(btn, command, label) {
   } finally {
     setTimeout(() => { btn.disabled = false; btn.classList.remove('busy'); }, 900);
   }
+}
+
+async function loadServiceData() {
+  const summary = $('#service-cache-summary');
+  if (!summary) return;
+  try {
+    const response = await fetch('/__cache', { cache: 'no-store' });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) throw new Error(data.message || ('HTTP ' + response.status));
+    const items = data.items || {};
+    summary.textContent = `Steam: ${formatBytes(items.steam_names || 0)} · ${t('clear_covers')}: ${formatBytes(items.steam_covers || 0)} · Events: ${formatBytes(items.events || 0)}`;
+  } catch (e) {
+    summary.textContent = '—';
+  }
+}
+
+async function clearServiceCache(name) {
+  try {
+    const response = await fetch('/__cache', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) throw new Error(data.message || ('HTTP ' + response.status));
+    if (name === 'events') { $('#log-output').textContent = ''; _eventLogLastId = 0; }
+    await loadServiceData();
+    toast(t('cache_cleared'), 'ok');
+  } catch (e) {
+    toast(e.message, 'err');
+  }
+}
+
+async function openDiagnostics() {
+  $('#diagnostics-modal').classList.add('show');
+  $('#diagnostics-modal').setAttribute('aria-hidden', 'false');
+  const output = $('#diagnostics-output');
+  output.textContent = '…';
+  try {
+    const response = await fetch('/__diagnostics', { cache: 'no-store' });
+    const data = await response.json().catch(() => ({}));
+    output.textContent = JSON.stringify(data, null, 2);
+  } catch (e) {
+    output.textContent = e.message;
+  }
+}
+
+async function loadUpdatesStatus() {
+  const output = $('#diagnostics-output');
+  output.textContent = '…';
+  try {
+    const response = await fetch('/__updates/status', { cache: 'no-store' });
+    const data = await response.json().catch(() => ({}));
+    output.textContent = JSON.stringify(data, null, 2);
+  } catch (e) {
+    output.textContent = e.message;
+  }
+}
+
+function closeDiagnostics() {
+  $('#diagnostics-modal').classList.remove('show');
+  $('#diagnostics-modal').setAttribute('aria-hidden', 'true');
 }
 
 function initContextMenu() {
@@ -1891,14 +1892,14 @@ function init() {
   }
 
   applyLanguage(UI_LANGUAGE, false);
-  const initialTheme = localStorage.getItem('asf_full_theme') || CFG.theme || localStorage.getItem('asf_theme') || 'dark';
-  applyFullTheme(initialTheme);
+  const initialTheme = CFG.theme || 'dark';
+  applyFullTheme(initialTheme, false);
   applyEconomyMode(ECONOMY_MODE, false);
 
   const themeBtn = $('#themeBtn');
   if (themeBtn) {
     themeBtn.onclick = () => {
-      const cur = localStorage.getItem('asf_full_theme') || 'dark';
+      const cur = CURRENT_FULL_THEME || 'dark';
       let next = 'dark';
       if (cur === 'dark') next = 'light';
       else if (cur === 'light') next = 'dark-img';
@@ -1917,20 +1918,14 @@ function init() {
     };
   });
 
-  const themeSelect = $('#settings-theme-select');
-  if (themeSelect) {
-    themeSelect.onchange = (e) => {
-      if (e.target.value === 'custom') openCustomThemeModal();
-      else applyFullTheme(e.target.value);
-    };
-  }
   $('#custom-theme-add').onclick = openCustomThemeModal;
   $('#custom-theme-cancel').onclick = closeCustomThemeModal;
   $('#custom-theme-save').onclick = saveCustomTheme;
   $('#custom-theme-file').onchange = e => readCustomThemeImage(e.target.files && e.target.files[0]);
   $('#custom-theme-remove-image').onclick = () => {
-    CUSTOM_THEME_PENDING_IMAGE = '';
-    CUSTOM_THEME_REMOVE_IMAGE = true;
+    CUSTOM_THEME_PENDING_MEDIA = '';
+    CUSTOM_THEME_PENDING_MEDIA_TYPE = '';
+    CUSTOM_THEME_REMOVE_MEDIA = true;
     $('#custom-theme-file').value = '';
     setCustomThemePreview('');
     $('#custom-theme-file-note').textContent = t('custom_theme_remove_image');
@@ -1938,6 +1933,17 @@ function init() {
 
   loadCustomTheme();
   loadAppSettings();
+  fetch('/__events').then(response => response.json()).then(data => {
+    if (!data.ok) return;
+    _eventLogLastId = data.lastEventId || 0;
+    const output = $('#log-output');
+    if (output) {
+      output.textContent = Array.isArray(data.events) && data.events.length
+        ? data.events.map(event => `[${new Date((event.time || 0) * 1000).toLocaleTimeString(UI_LANGUAGE === 'uk' ? 'uk-UA' : UI_LANGUAGE === 'en' ? 'en-US' : 'ru-RU')}] ${event.message}`).join('\n') + '\n'
+        : '';
+      output.scrollTop = output.scrollHeight;
+    }
+  }).catch(() => {});
   const languageSelect = $('#set-language');
   if (languageSelect) languageSelect.onchange = async e => {
     const next = ['ru', 'en', 'uk'].includes(e.target.value) ? e.target.value : 'ru';
@@ -1957,7 +1963,6 @@ function init() {
     const value = ['hours_asc', 'hours_desc', 'popular'].includes(e.target.value) ? e.target.value : 'hours_desc';
     const previous = HOUR_FARM_PRIORITY_MODE;
     HOUR_FARM_PRIORITY_MODE = value;
-    localStorage.setItem('asf_hour_farm_priority_mode', value);
     try {
       const r = await localSettings({ hour_farm_priority_mode: value });
       if (r.ok === false) throw new Error('save failed');
@@ -1965,7 +1970,6 @@ function init() {
     } catch (err) {
       HOUR_FARM_PRIORITY_MODE = previous;
       priorityModeSelect.value = previous;
-      localStorage.setItem('asf_hour_farm_priority_mode', previous);
       toast(t('settings_error') + ': ' + err.message, 'err');
     }
   };
@@ -1987,26 +1991,20 @@ function init() {
   if (autoHourToggle) autoHourToggle.onchange = async e => {
     const prev = AUTO_HOUR_FARM;
     AUTO_HOUR_FARM = !!e.target.checked;
-    localStorage.setItem('asf_auto_hour_farm_after_cards', AUTO_HOUR_FARM ? '1' : '0');
-    _autoHourInitialized = false;
     const ok = await saveAppSetting('auto_hour_farm_after_cards', AUTO_HOUR_FARM);
     if (!ok) {
       AUTO_HOUR_FARM = prev;
       e.target.checked = prev;
-      localStorage.setItem('asf_auto_hour_farm_after_cards', prev ? '1' : '0');
     }
   };
   const startHourToggle = $('#set-start-hour-farm');
   if (startHourToggle) startHourToggle.onchange = async e => {
     const prev = START_HOUR_FARM;
     START_HOUR_FARM = !!e.target.checked;
-    _startupHourDone = false;
-    localStorage.setItem('asf_start_hour_farm_on_launch', START_HOUR_FARM ? '1' : '0');
     const ok = await saveAppSetting('start_hour_farm_on_launch', START_HOUR_FARM);
     if (!ok) {
       START_HOUR_FARM = prev;
       e.target.checked = prev;
-      localStorage.setItem('asf_start_hour_farm_on_launch', prev ? '1' : '0');
     }
   };
   const priorityInput = $('#set-priority-hour-games');
@@ -2037,6 +2035,16 @@ function init() {
   $('#cmd-input').addEventListener('keydown', e => { if (e.key === 'Enter') sendCommand(e.target.value); });
   $$('.chip').forEach(c => c.onclick = () => { $('#cmd-input').value = c.getAttribute('data-cmd'); sendCommand(c.getAttribute('data-cmd')); });
 
+  const sidebar = $('.sidebar');
+  if (sidebar) sidebar.ondblclick = event => {
+    if (!event.target.closest('#sidebar-expand')) applySidebarCollapsed(true);
+  };
+  $('#sidebar-expand').onclick = () => applySidebarCollapsed(false);
+  const botsSearch = $('#bots-search');
+  if (botsSearch) botsSearch.oninput = e => {
+    BOT_SEARCH_QUERY = e.target.value || '';
+    renderBots(BOTS);
+  };
   $('#refreshBtn').onclick = refresh;
   $('#pluginsRefresh').onclick = () => {
     if (ACTIVE_PLUGIN_TAB === 'store') loadPluginStore(); else loadPluginLibrary();
@@ -2044,7 +2052,14 @@ function init() {
   $$('.plugin-tab').forEach(btn => btn.onclick = () => selectPluginTab(btn.dataset.pluginTab));
   $('#plugin-remove-cancel').onclick = closePluginRemove;
   $('#plugin-remove-confirm').onclick = confirmPluginRemove;
-  $('#logClear').onclick = () => { $('#log-output').textContent = ''; };
+  $('#bot-details-close').onclick = closeBotDetails;
+  $('#diagnostics-open').onclick = openDiagnostics;
+  $('#diagnostics-close').onclick = closeDiagnostics;
+  $('#updates-status').onclick = loadUpdatesStatus;
+  $('#cache-clear-covers').onclick = () => clearServiceCache('steam_covers');
+  $('#cache-clear-names').onclick = () => clearServiceCache('steam_names');
+  $('#cache-clear-events').onclick = () => clearServiceCache('events');
+  $('#logClear').onclick = () => { $('#log-output').textContent = ''; _eventLogLastId = 0; fetch('/__events/clear', { method: 'POST' }).catch(() => {}); };
 
   $('#auth-save').onclick = () => {
     IPC_PASSWORD = $('#auth-input').value;
@@ -2065,7 +2080,7 @@ function init() {
   $('#guard-bycode').onclick = guardByCode;
   $('#guard-input').addEventListener('keydown', e => { if (e.key === 'Enter') sendGuard(); });
 
-  $('#boost-fab').onclick = boostHours;
+  $('#boost-fab').onclick = startHourFarm;
   $('#pending-input-nav').onclick = e => { e.preventDefault(); openDeferredGuard(); };
 
   $('#apikey-cancel').onclick = closeApiKeyModal;
