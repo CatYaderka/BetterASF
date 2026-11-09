@@ -1,6 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
-title Build ASF Desktop (single exe, ASF embedded)
+title Build BetterASF (ASF downloads automatically)
 cd /d "%~dp0"
 
 where python >nul 2>nul
@@ -8,26 +8,15 @@ if errorlevel 1 goto NOPYTHON
 
 echo [1/4] Installing dependencies...
 python -m pip install --upgrade pip
-python -m pip install -r requirements.txt pyinstaller pillow
+python -m pip install -r requirements.txt pyinstaller pillow ziglang
 if errorlevel 1 goto FAILDEPS
 if exist "_asf\ArchiSteamFarm.exe" goto HAVEASF
-echo.
-echo [i] Folder "_asf" with ArchiSteamFarm.exe was NOT found.
-echo     To EMBED ASF into the single exe:
-echo       1) Download ASF (the OS build, e.g. ASF-win-x64) from:
-echo          https://github.com/JustArchiNET/ArchiSteamFarm/releases
-echo       2) Put its CONTENTS into a folder named  _asf  next to this script
-echo          (so that  _asf\ArchiSteamFarm.exe  exists).
-echo       3) Run this script again.
-echo.
-echo     You can also build WITHOUT embedding (ASF must then sit next to the exe).
-choice /m "Continue building WITHOUT embedded ASF"
-if errorlevel 2 goto END
+echo [2/4] ASF is not bundled. BetterASF will download the official Windows ASF build on first launch.
 goto BUILD
 
 :HAVEASF
-echo [2/4] Embedded ASF found in _asf. Writing version marker...
-for /f "delims=" %%v in ('powershell -NoProfile -Command "(Get-Item _asf\ArchiSteamFarm.exe).LastWriteTime.ToString('yyyyMMddHHmmss')"') do set ASFVER=%%v
+echo [2/4] Optional embedded ASF found in _asf. Writing version marker...
+for /f "delims=" %%v in ('python -c "import os,time; print(time.strftime('%%Y%%m%%d%%H%%M%%S', time.localtime(os.path.getmtime(r'_asf\ArchiSteamFarm.exe'))))"') do set ASFVER=%%v
 if "!ASFVER!"=="" set ASFVER=1
 > "_asf\_asf_version.txt" echo !ASFVER!
 
@@ -49,8 +38,10 @@ echo   Run dist\BetterASF.exe once to install it to Program Files\BetterASF.
 echo   Desktop and Start Menu shortcuts are created automatically.
 echo.
 echo   User data is kept outside the executable in:
-echo     Documents\BetterASF\config\       (accounts - keep/backup this folder)
-echo     Documents\BetterASF\ASF-runtime\  (ASF runtime, managed automatically)
+echo     OneDrive\Documents\BetterASF\      (priority path when OneDrive Documents exists)
+echo     Documents\BetterASF\               (used when OneDrive Documents is unavailable)
+echo     config\                              (accounts - keep/backup this folder)
+echo     ASF-runtime\                         (ASF runtime, downloaded and managed automatically)
 echo.
 echo   There is no separate installer. Publish the single dist\BetterASF.exe file.
 pause

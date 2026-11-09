@@ -227,7 +227,7 @@
 
       <div class="cmd-box settings-container settings-system">
         <h2 class="settings-section-title" data-i18n="behavior_title">Поведение приложения</h2>
-        <p class="settings-sub" data-i18n="behavior_sub">Настройки самого BetterASF. Они сохраняются в Documents\BetterASF\settings.json.</p>
+        <p class="settings-sub" data-i18n="behavior_sub">Настройки самого BetterASF. Они сохраняются в папке данных BetterASF.</p>
 
         <label class="switch-row" for="set-minimize-tray">
           <span class="switch-text">
@@ -379,21 +379,33 @@
     <h2 data-i18n="custom_theme_title">Своя тема</h2>
     <p class="modal-sub" data-i18n="custom_theme_sub">Выберите светлую или тёмную основу, загрузите своё изображение и при необходимости сделайте элементы прозрачными.</p>
 
+    <input id="custom-theme-file" class="custom-theme-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm">
+    <label class="custom-theme-stage" id="custom-theme-stage" for="custom-theme-file">
+      <div class="custom-theme-preview" id="custom-theme-preview" aria-hidden="true"></div>
+      <div class="custom-theme-stage-elements" aria-hidden="true">
+        <div class="custom-theme-stage-titlebar"><span class="custom-theme-stage-dot"></span><span>BetterASF</span><i></i><em></em><em></em></div>
+        <div class="custom-theme-stage-layout">
+          <div class="custom-theme-stage-side"><span></span><span></span><span></span><span></span></div>
+          <div class="custom-theme-stage-content"><b></b><div><i></i><i></i><i></i></div><small></small></div>
+        </div>
+      </div>
+      <div class="custom-theme-stage-add"><strong>+</strong><span data-i18n="custom_theme_image">Свой медиафон</span></div>
+    </label>
+    <p class="settings-field-hint" id="custom-theme-file-note" data-i18n="custom_theme_image_hint">PNG, JPG, WebP, GIF, MP4 или WebM. Изображение до 12 МБ, видео до 50 МБ.</p>
+
     <label class="field-label" data-i18n="custom_theme_base">Основа темы</label>
     <div class="custom-theme-base-options">
       <label class="custom-theme-base-option"><input type="radio" name="custom-theme-base" value="dark" checked><span data-i18n="custom_theme_dark">Тёмная</span></label>
       <label class="custom-theme-base-option"><input type="radio" name="custom-theme-base" value="light"><span data-i18n="custom_theme_light">Светлая</span></label>
     </div>
 
-    <label class="field-label" for="custom-theme-file" data-i18n="custom_theme_image">Своя картинка</label>
-    <input id="custom-theme-file" class="custom-theme-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm">
-    <div class="custom-theme-preview" id="custom-theme-preview" aria-hidden="true"></div>
-    <p class="settings-field-hint" id="custom-theme-file-note" data-i18n="custom_theme_image_hint">PNG, JPG, WebP, GIF, MP4 или WebM. Изображение до 12 МБ, видео до 50 МБ.</p>
-
     <label class="checkbox-row custom-theme-transparency" for="custom-theme-transparent">
       <input id="custom-theme-transparent" type="checkbox">
       <span data-i18n="custom_theme_transparent">Включить прозрачность элементов</span>
     </label>
+
+    <button class="btn ghost custom-theme-accent" id="custom-theme-auto-accent" type="button" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m12 3 1.75 5.25L19 10l-5.25 1.75L12 17l-1.75-5.25L5 10l5.25-1.75L12 3Z"/><path d="m19 16 .75 2.25L22 19l-2.25.75L19 22l-.75-2.25L16 19l2.25-.75L19 16Z"/></svg><span data-i18n="custom_theme_auto_accent">Подобрать акцент из фона</span></button>
+    <p class="settings-field-hint" id="custom-theme-accent-note" data-i18n="custom_theme_auto_accent_hint">Активные вкладки, кнопки и акцентные элементы получат средний цвет фона.</p>
 
     <div class="modal-actions modal-actions--split">
       <button class="btn danger" id="custom-theme-remove-image" type="button" data-i18n="custom_theme_remove_image">Убрать картинку</button>

@@ -17,6 +17,7 @@ import tempfile
 import zipfile
 import base64
 import re
+import platform
 from pathlib import Path
 
 try:
@@ -26,8 +27,9 @@ except Exception:
 
 HERE = Path(__file__).resolve().parent
 APP_NAME = "BetterASF"
-APP_VERSION = "4.0"
+APP_VERSION = "5.0"
 GITHUB_REPO = "CatYaderka/BetterASF"
+ASF_GITHUB_REPO = "JustArchiNET/ArchiSteamFarm"
 
 
 
@@ -64,7 +66,10 @@ _GAME_META_LOCK = threading.RLock()
 
 _LOG_PATH = None
 _EVENT_LOG_SERVICE = None
-RUNTIME = {"steam_api_key": "", "ipc_password": "", "asf_status": "starting", "asf_status_message": ""}
+_INSTANCE_MUTEX = None
+_DATA_MIGRATION_NOTICES = []
+_DATA_MIGRATION_SOURCES = []
+RUNTIME = {"steam_api_key": "", "ipc_password": "", "asf_status": "starting", "asf_status_message": "", "ui_ready": False}
 
 
 def _set_log_path(p):
@@ -100,6 +105,273 @@ def is_frozen():
     return getattr(sys, "frozen", False)
 
 
+def acquire_instance_lock():
+    global _INSTANCE_MUTEX
+    if os.name != "nt":
+        return True
+    try:
+        import ctypes
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.CreateMutexW.restype = ctypes.c_void_p
+        kernel32.SetLastError(0)
+        mutex = kernel32.CreateMutexW(None, False, r"Local\BetterASF.SingleInstance")
+        if not mutex:
+            return True
+        if ctypes.get_last_error() == 183:
+            kernel32.CloseHandle(mutex)
+            return False
+        _INSTANCE_MUTEX = mutex
+        return True
+    except Exception:
+        return True
+
+
+def release_instance_lock():
+    global _INSTANCE_MUTEX
+    if _INSTANCE_MUTEX:
+        try:
+            import ctypes
+            ctypes.windll.kernel32.CloseHandle(_INSTANCE_MUTEX)
+        except Exception:
+            pass
+        _INSTANCE_MUTEX = None
+
+
+def _show_startup_warning(message):
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(None, str(message), APP_NAME, 0x10)
+    except Exception:
+        pass
+
+
+def _system_process_entries():
+    entries = []
+    if os.name == "nt":
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            class PROCESSENTRY32W(ctypes.Structure):
+                _fields_ = [
+                    ("dwSize", wintypes.DWORD),
+                    ("cntUsage", wintypes.DWORD),
+                    ("th32ProcessID", wintypes.DWORD),
+                    ("th32DefaultHeapID", ctypes.c_size_t),
+                    ("th32ModuleID", wintypes.DWORD),
+                    ("cntThreads", wintypes.DWORD),
+                    ("th32ParentProcessID", wintypes.DWORD),
+                    ("pcPriClassBase", ctypes.c_long),
+                    ("dwFlags", wintypes.DWORD),
+                    ("szExeFile", wintypes.WCHAR * 260),
+                ]
+
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            kernel32.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
+            kernel32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+            kernel32.Process32FirstW.argtypes = [wintypes.HANDLE, ctypes.POINTER(PROCESSENTRY32W)]
+            kernel32.Process32FirstW.restype = wintypes.BOOL
+            kernel32.Process32NextW.argtypes = [wintypes.HANDLE, ctypes.POINTER(PROCESSENTRY32W)]
+            kernel32.Process32NextW.restype = wintypes.BOOL
+            kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+            kernel32.CloseHandle.restype = wintypes.BOOL
+            snapshot = kernel32.CreateToolhelp32Snapshot(0x00000002, 0)
+            invalid = ctypes.c_void_p(-1).value
+            if not snapshot or snapshot == invalid:
+                return entries
+            try:
+                entry = PROCESSENTRY32W()
+                entry.dwSize = ctypes.sizeof(entry)
+                current = kernel32.Process32FirstW(snapshot, ctypes.byref(entry))
+                while current:
+                    entries.append((int(entry.th32ProcessID), int(entry.th32ParentProcessID), str(entry.szExeFile)))
+                    current = kernel32.Process32NextW(snapshot, ctypes.byref(entry))
+            finally:
+                kernel32.CloseHandle(snapshot)
+        except Exception:
+            pass
+        return entries
+    try:
+        for path in Path("/proc").iterdir():
+            if not path.name.isdigit():
+                continue
+            try:
+                pid = int(path.name)
+                stat = (path / "stat").read_text(encoding="utf-8", errors="ignore")
+                close_paren = stat.rfind(")")
+                open_paren = stat.find("(")
+                comm = stat[open_paren + 1:close_paren] if open_paren >= 0 and close_paren > open_paren else ""
+                ppid = int(stat[close_paren + 2:].split()[1])
+                entries.append((pid, ppid, comm))
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return entries
+
+
+def _system_process_exe_path(pid):
+    if os.name != "nt":
+        try:
+            return os.readlink(f"/proc/{int(pid)}/exe")
+        except Exception:
+            return ""
+    try:
+        import ctypes
+        from ctypes import wintypes
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)]
+        kernel32.QueryFullProcessImageNameW.restype = wintypes.BOOL
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+        kernel32.CloseHandle.restype = wintypes.BOOL
+        handle = kernel32.OpenProcess(0x1000, False, int(pid))
+        if not handle:
+            return ""
+        try:
+            size = wintypes.DWORD(4096)
+            buf = ctypes.create_unicode_buffer(size.value)
+            if kernel32.QueryFullProcessImageNameW(handle, 0, buf, ctypes.byref(size)):
+                return str(buf.value or "")
+        finally:
+            kernel32.CloseHandle(handle)
+    except Exception:
+        pass
+    return ""
+
+
+def _wait_for_pid_exit(pid, timeout_sec=45.0):
+    try:
+        pid = int(pid)
+    except Exception:
+        return True
+    if pid <= 0 or os.name != "nt":
+        return True
+    deadline = time.time() + max(0.5, float(timeout_sec))
+    try:
+        import ctypes
+        from ctypes import wintypes
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+        kernel32.WaitForSingleObject.restype = wintypes.DWORD
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+        kernel32.CloseHandle.restype = wintypes.BOOL
+        handle = kernel32.OpenProcess(0x00100000, False, pid)
+        if handle:
+            try:
+                remaining_ms = max(0, int((deadline - time.time()) * 1000))
+                return kernel32.WaitForSingleObject(handle, remaining_ms) == 0
+            finally:
+                kernel32.CloseHandle(handle)
+    except Exception:
+        pass
+    while time.time() < deadline:
+        if pid not in {item[0] for item in _system_process_entries()}:
+            return True
+        time.sleep(0.25)
+    return pid not in {item[0] for item in _system_process_entries()}
+
+
+def _terminate_pid(pid, exit_code=1):
+    try:
+        pid = int(pid)
+    except Exception:
+        return False
+    if pid <= 0:
+        return False
+    if os.name != "nt":
+        try:
+            os.kill(pid, signal.SIGTERM)
+            return True
+        except Exception:
+            return False
+    try:
+        import ctypes
+        from ctypes import wintypes
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
+        kernel32.TerminateProcess.restype = wintypes.BOOL
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+        kernel32.CloseHandle.restype = wintypes.BOOL
+        handle = kernel32.OpenProcess(0x0001, False, pid)
+        if not handle:
+            return False
+        try:
+            return bool(kernel32.TerminateProcess(handle, int(exit_code)))
+        finally:
+            kernel32.CloseHandle(handle)
+    except Exception:
+        return False
+
+
+def _managed_asf_executable_keys():
+    roots = [DATA_DIR] + list(_DATA_MIGRATION_SOURCES) if "DATA_DIR" in globals() else []
+    return {_path_key(root / "ASF-runtime" / "ArchiSteamFarm.exe") for root in roots}
+
+
+def _other_betterasf_processes(include_managed_asf=False):
+    if os.name != "nt":
+        return []
+    entries = _system_process_entries()
+    parent_by_pid = {pid: ppid for pid, ppid, _ in entries}
+    name_by_pid = {pid: name for pid, _, name in entries}
+    own_pids = {int(os.getpid()), int(os.getppid())}
+    cur = int(os.getpid())
+    for _ in range(8):
+        parent = parent_by_pid.get(cur, 0)
+        if parent <= 0 or parent in own_pids:
+            break
+        if name_by_pid.get(parent, "").casefold() == "betterasf.exe":
+            own_pids.add(parent)
+            cur = parent
+        else:
+            break
+    managed_asf = _managed_asf_executable_keys() if include_managed_asf else set()
+    filtered = []
+    for pid, _, name in entries:
+        if pid in own_pids:
+            continue
+        lowered = name.casefold()
+        if lowered == "betterasf.exe":
+            filtered.append({"ProcessId": pid, "Name": name, "ExecutablePath": _system_process_exe_path(pid)})
+        elif include_managed_asf and lowered == "archisteamfarm.exe":
+            exe_path = _system_process_exe_path(pid)
+            if exe_path and _path_key(exe_path) in managed_asf:
+                filtered.append({"ProcessId": pid, "Name": name, "ExecutablePath": exe_path})
+    return filtered
+
+
+def _ensure_no_legacy_instance(include_managed_asf=False):
+    others = _other_betterasf_processes(include_managed_asf)
+    deadline = time.time() + 4.0
+    while others and time.time() < deadline:
+        time.sleep(0.4)
+        others = _other_betterasf_processes(include_managed_asf)
+    if not others:
+        return True
+    entries = []
+    for item in others[:4]:
+        pid = item.get("ProcessId", "?")
+        name = item.get("Name", "BetterASF.exe")
+        path = item.get("ExecutablePath") or "unknown path"
+        entries.append(f"{name} PID {pid}: {path}")
+    details = "\n".join(entries)
+    message = (
+        "Обнаружен другой запущенный BetterASF или ASF из его папки данных.\n\n"
+        "Закройте его через значок в трее или Диспетчер задач, затем повторите запуск.\n\n"
+        f"{details}"
+    )
+    log(message.replace("\n", " | "))
+    _show_startup_warning(message)
+    return False
+
 def app_dir():
     return Path(sys.executable).resolve().parent if is_frozen() else HERE
 
@@ -112,25 +384,179 @@ APP_DIR = app_dir()
 RES_DIR = resource_dir()
 
 
-def _documents_dir():
-    up = os.environ.get("USERPROFILE")
-    if up:
-        d = Path(up) / "Documents"
-        if d.exists():
-            return d
-        return Path(up)
-    return Path.home()
+def _path_key(path):
+    try:
+        return str(Path(path).resolve()).replace("/", "\\").casefold()
+    except Exception:
+        return str(path).replace("/", "\\").casefold()
+
+
+def _unique_paths(paths):
+    result = []
+    seen = set()
+    for path in paths:
+        if not path:
+            continue
+        value = Path(path)
+        key = _path_key(value)
+        if key not in seen:
+            seen.add(key)
+            result.append(value)
+    return result
+
+
+def _user_profile_dir():
+    value = os.environ.get("USERPROFILE")
+    return Path(value) if value else Path.home()
+
+
+def _get_shell_folder(csidl):
+    if os.name != "nt":
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+        shell32 = ctypes.WinDLL("shell32", use_last_error=True)
+        shell32.SHGetFolderPathW.argtypes = [wintypes.HWND, ctypes.c_int, wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR]
+        shell32.SHGetFolderPathW.restype = ctypes.c_long
+        buf = ctypes.create_unicode_buffer(wintypes.MAX_PATH)
+        if shell32.SHGetFolderPathW(None, int(csidl), None, 0, buf) == 0 and buf.value:
+            return Path(buf.value)
+    except Exception:
+        pass
+    return None
+
+
+def _known_documents_dir():
+    fallback = _user_profile_dir() / "Documents"
+    if os.name != "nt":
+        return fallback
+    return _get_shell_folder(0x0005) or fallback
+
+
+def _is_onedrive_path(path):
+    return any(part.casefold().startswith("onedrive") for part in Path(path).parts)
+
+
+def _onedrive_documents_dirs():
+    profile = _user_profile_dir()
+    roots = []
+    for name in ("OneDrive", "OneDriveConsumer", "OneDriveCommercial"):
+        value = os.environ.get(name)
+        if value:
+            roots.append(Path(value))
+    try:
+        roots.extend(path for path in profile.glob("OneDrive*") if path.is_dir())
+    except Exception:
+        pass
+    candidates = [root / "Documents" for root in _unique_paths(roots)]
+    return [path for path in _unique_paths(candidates) if path.is_dir()]
+
+
+def _documents_candidates():
+    profile = _user_profile_dir()
+    known = _known_documents_dir()
+    onedrive = _onedrive_documents_dirs()
+    if known.is_dir() and _is_onedrive_path(known):
+        onedrive = [known] + onedrive
+    regular = [path for path in (known, profile / "Documents") if path.is_dir()]
+    regular.append(profile)
+    return _unique_paths(onedrive + regular)
+
+
+def _data_locations():
+    return _unique_paths([documents / APP_NAME for documents in _documents_candidates()])
+
+
+def _merge_priority_json(primary, secondary):
+    if isinstance(primary, dict) and isinstance(secondary, dict):
+        result = dict(primary)
+        for key, value in secondary.items():
+            result[key] = _merge_priority_json(result[key], value) if key in result else value
+        return result
+    return primary
+
+
+def _write_json_atomically(path, value):
+    temporary = path.with_name(path.name + ".part")
+    temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(path)
+
+
+def _merge_legacy_configs():
+    target = DATA_DIR / "config"
+    copied = 0
+    merged = 0
+    retained = 0
+    sources_used = []
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+    except Exception as exc:
+        _DATA_MIGRATION_NOTICES.append(f"Config migration skipped: cannot create {target}: {exc}")
+        return
+    for source_root in _DATA_MIGRATION_SOURCES:
+        source = source_root / "config"
+        if not source.is_dir() or _path_key(source_root) == _path_key(DATA_DIR):
+            continue
+        source_used = False
+        try:
+            files = [path for path in source.rglob("*") if path.is_file()]
+        except Exception as exc:
+            _DATA_MIGRATION_NOTICES.append(f"Config migration skipped for {source}: {exc}")
+            continue
+        for source_file in files:
+            try:
+                relative = source_file.relative_to(source)
+                target_file = target / relative
+                target_file.parent.mkdir(parents=True, exist_ok=True)
+                if not target_file.exists():
+                    shutil.copy2(source_file, target_file)
+                    copied += 1
+                    source_used = True
+                    continue
+                if target_file.suffix.casefold() != ".json" or source_file.suffix.casefold() != ".json":
+                    retained += 1
+                    continue
+                primary = json.loads(target_file.read_text(encoding="utf-8"))
+                secondary = json.loads(source_file.read_text(encoding="utf-8"))
+                combined = _merge_priority_json(primary, secondary)
+                if combined != primary:
+                    _write_json_atomically(target_file, combined)
+                    merged += 1
+                    source_used = True
+                else:
+                    retained += 1
+            except Exception:
+                retained += 1
+        if source_used:
+            sources_used.append(str(source))
+    if copied or merged:
+        source_text = "; ".join(sources_used) if sources_used else "legacy Documents folder"
+        _DATA_MIGRATION_NOTICES.append(
+            f"Config migration complete: copied={copied}, merged={merged}, retained={retained}; source={source_text}"
+        )
 
 
 def data_dir():
+    global _DATA_MIGRATION_SOURCES
     env = os.environ.get("ASF_DESKTOP_DATA")
     if env:
         d = Path(env)
         d.mkdir(parents=True, exist_ok=True)
+        _DATA_MIGRATION_SOURCES = []
         return d
-    d = _documents_dir() / APP_NAME
+    locations = _data_locations()
+    d = locations[0] if locations else _user_profile_dir() / APP_NAME
     d.mkdir(parents=True, exist_ok=True)
+    _DATA_MIGRATION_SOURCES = [location for location in locations[1:] if _path_key(location) != _path_key(d)]
+    if _is_onedrive_path(d.parent):
+        _DATA_MIGRATION_NOTICES.append(f"Data directory selected with OneDrive priority: {d}")
     return d
+
+
+def _flush_data_migration_notices():
+    while _DATA_MIGRATION_NOTICES:
+        log(_DATA_MIGRATION_NOTICES.pop(0))
 
 
 DATA_DIR = data_dir()
@@ -161,6 +587,7 @@ DEFAULTS = {
     "window_width": "1200",
     "window_height": "800",
     "start_asf": "true",
+    "asf_auto_download": "true",
     "self_install_to_program_files": "true",
     "create_shortcuts": "true",
     "startup_timeout": "180",
@@ -172,8 +599,9 @@ DEFAULTS = {
     "ui_mode": "webview",
     "browser_path": "",
     "webview_low_memory": "true",
-    "webview_aggressive": "true",
-    "webview_single_process": "true",
+    "webview_aggressive": "false",
+    "webview_single_process": "false",
+    "webview_render_safe_mode": "true",
     "webview_disable_gpu": "false",
     "webview_in_process_gpu": "false",
     "memory_trim": "true",
@@ -263,6 +691,11 @@ def _custom_theme_media_path(settings=None):
     return path if path.is_file() else None
 
 
+def _custom_theme_accent(value):
+    value = str(value or "").strip()
+    return value.lower() if re.fullmatch(r"#[0-9a-fA-F]{6}", value) else ""
+
+
 def custom_theme_state():
     settings = _load_settings()
     base = str(settings.get("custom_theme_base") or "dark").lower()
@@ -274,6 +707,7 @@ def custom_theme_state():
         "ok": True,
         "base": base,
         "transparent": bool(settings.get("custom_theme_transparent", False)),
+        "accent": _custom_theme_accent(settings.get("custom_theme_accent")),
         "hasMedia": bool(media),
         "mediaType": kind,
         "mediaUrl": f"/__custom_theme/media?v={media.stat().st_mtime_ns}" if media else "",
@@ -306,6 +740,11 @@ def save_custom_theme(payload):
         "custom_theme_base": base,
         "custom_theme_transparent": bool(payload.get("transparent", False)),
     }
+    if "accent" in payload:
+        accent = _custom_theme_accent(payload.get("accent"))
+        if payload.get("accent") and not accent:
+            return {"ok": False, "message": "Invalid accent color."}
+        patch["custom_theme_accent"] = accent
     try:
         if payload.get("removeImage"):
             for ext in _CUSTOM_THEME_MEDIA_TYPES:
@@ -316,6 +755,7 @@ def save_custom_theme(payload):
                         pass
             patch["custom_theme_media"] = ""
             patch["custom_theme_image"] = ""
+            patch["custom_theme_accent"] = ""
 
         media_data = payload.get("imageData")
         if media_data:
@@ -364,30 +804,110 @@ def set_app_setting(key, value):
     _save_settings({key: value})
 
 
-def _autostart_command():
-    if is_frozen():
-        return f'"{sys.executable}"'
-    return f'"{sys.executable}" "{Path(__file__).resolve()}"'
+def _sync_windows_shortcut(lnk_path, target_path, arguments="", workdir="", icon_path="", description=""):
+    if os.name != "nt":
+        return False
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class GUID(ctypes.Structure):
+            _fields_ = [
+                ("Data1", wintypes.DWORD),
+                ("Data2", wintypes.WORD),
+                ("Data3", wintypes.WORD),
+                ("Data4", ctypes.c_ubyte * 8),
+            ]
+
+        clsid_shell_link = GUID(0x00021401, 0x0000, 0x0000, (ctypes.c_ubyte * 8)(0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46))
+        iid_shell_link = GUID(0x000214F9, 0x0000, 0x0000, (ctypes.c_ubyte * 8)(0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46))
+        iid_persist_file = GUID(0x0000010B, 0x0000, 0x0000, (ctypes.c_ubyte * 8)(0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46))
+
+        ole32 = ctypes.WinDLL("ole32", use_last_error=True)
+        ole32.CoInitializeEx.argtypes = [ctypes.c_void_p, wintypes.DWORD]
+        ole32.CoInitializeEx.restype = ctypes.c_long
+        ole32.CoUninitialize.argtypes = []
+        ole32.CoUninitialize.restype = None
+        ole32.CoCreateInstance.argtypes = [ctypes.POINTER(GUID), ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(GUID), ctypes.POINTER(ctypes.c_void_p)]
+        ole32.CoCreateInstance.restype = ctypes.c_long
+
+        hr_init = ole32.CoInitializeEx(None, 0x2)
+        need_uninit = hr_init in (0, 1)
+        link_ptr = ctypes.c_void_p()
+        persist_ptr = ctypes.c_void_p()
+
+        def vtbl_call(obj_ptr, index, restype, *argtypes):
+            vtbl = ctypes.cast(ctypes.cast(obj_ptr, ctypes.POINTER(ctypes.c_void_p))[0], ctypes.POINTER(ctypes.c_void_p))
+            proto = ctypes.WINFUNCTYPE(restype, ctypes.c_void_p, *argtypes)
+            return proto(vtbl[index])
+
+        try:
+            if ole32.CoCreateInstance(ctypes.byref(clsid_shell_link), None, 1, ctypes.byref(iid_shell_link), ctypes.byref(link_ptr)) < 0 or not link_ptr.value:
+                return False
+            query_interface = vtbl_call(link_ptr, 0, ctypes.c_long, ctypes.POINTER(GUID), ctypes.POINTER(ctypes.c_void_p))
+            if query_interface(link_ptr, ctypes.byref(iid_persist_file), ctypes.byref(persist_ptr)) < 0 or not persist_ptr.value:
+                return False
+
+            lnk_file = Path(lnk_path)
+            target_str = str(target_path)
+            if lnk_file.is_file() and not arguments:
+                load_fn = vtbl_call(persist_ptr, 5, ctypes.c_long, wintypes.LPCWSTR, wintypes.DWORD)
+                get_path_fn = vtbl_call(link_ptr, 3, ctypes.c_long, wintypes.LPWSTR, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD)
+                if load_fn(persist_ptr, str(lnk_file), 0) >= 0:
+                    buf = ctypes.create_unicode_buffer(wintypes.MAX_PATH)
+                    if get_path_fn(link_ptr, buf, wintypes.MAX_PATH, None, 0) == 0 and _path_key(buf.value) == _path_key(target_str):
+                        return True
+
+            set_path_fn = vtbl_call(link_ptr, 20, ctypes.c_long, wintypes.LPCWSTR)
+            set_workdir_fn = vtbl_call(link_ptr, 9, ctypes.c_long, wintypes.LPCWSTR)
+            set_args_fn = vtbl_call(link_ptr, 11, ctypes.c_long, wintypes.LPCWSTR)
+            set_desc_fn = vtbl_call(link_ptr, 7, ctypes.c_long, wintypes.LPCWSTR)
+            set_icon_fn = vtbl_call(link_ptr, 17, ctypes.c_long, wintypes.LPCWSTR, ctypes.c_int)
+            save_fn = vtbl_call(persist_ptr, 6, ctypes.c_long, wintypes.LPCWSTR, wintypes.BOOL)
+
+            if set_path_fn(link_ptr, target_str) < 0:
+                return False
+            if workdir:
+                set_workdir_fn(link_ptr, str(workdir))
+            if arguments:
+                set_args_fn(link_ptr, str(arguments))
+            if description:
+                set_desc_fn(link_ptr, str(description))
+            if icon_path:
+                set_icon_fn(link_ptr, str(icon_path), 0)
+
+            lnk_file.parent.mkdir(parents=True, exist_ok=True)
+            return save_fn(persist_ptr, str(lnk_file), True) >= 0
+        finally:
+            if persist_ptr.value:
+                vtbl_call(persist_ptr, 2, wintypes.ULONG)(persist_ptr)
+            if link_ptr.value:
+                vtbl_call(link_ptr, 2, wintypes.ULONG)(link_ptr)
+            if need_uninit:
+                ole32.CoUninitialize()
+    except Exception as exc:
+        log(f"Shortcut COM error: {exc}")
+        return False
 
 
 def set_autostart_enabled(enabled):
     enabled = bool(enabled)
     set_app_setting("autostart", enabled)
     if os.name != "nt":
-
         return True
     try:
-        import winreg
-        key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE) as k:
-            if enabled:
-                winreg.SetValueEx(k, APP_NAME, 0, winreg.REG_SZ, _autostart_command())
-            else:
-                try:
-                    winreg.DeleteValue(k, APP_NAME)
-                except FileNotFoundError:
-                    pass
-        return True
+        startup_dir = _get_shell_folder(0x0007)
+        if not startup_dir:
+            return False
+        lnk = startup_dir / f"{APP_NAME}.lnk"
+        if not enabled:
+            lnk.unlink(missing_ok=True)
+            return True
+        exe = Path(sys.executable).resolve()
+        if is_frozen():
+            return _sync_windows_shortcut(lnk, exe, "", exe.parent, exe, APP_NAME)
+        script = Path(__file__).resolve()
+        return _sync_windows_shortcut(lnk, exe, subprocess.list2cmdline([str(script)]), script.parent, exe, APP_NAME)
     except Exception as e:
         log(f"Не удалось изменить автозапуск: {e}")
         return False
@@ -401,71 +921,156 @@ def _is_under_path(path, parent):
         return False
 
 
-def _ps_quote(value):
-    return "'" + str(value).replace("'", "''") + "'"
-
-
 def ensure_user_shortcuts(cfg):
-
     enabled = str(cfg.get("create_shortcuts", "true")).lower() in ("1", "true", "yes", "on")
     if not enabled or os.name != "nt" or not is_frozen():
         return
     try:
-        import base64
-        target = str(Path(sys.executable).resolve())
-        workdir = str(Path(sys.executable).resolve().parent)
-        icon = target
-        ps = f"""
-$ErrorActionPreference = 'SilentlyContinue'
-$target = {_ps_quote(target)}
-$workdir = {_ps_quote(workdir)}
-$icon = {_ps_quote(icon)}
-$desktop = [Environment]::GetFolderPath('DesktopDirectory')
-$programs = [Environment]::GetFolderPath('Programs')
-$startDir = Join-Path $programs 'BetterASF'
-New-Item -ItemType Directory -Force -Path $startDir | Out-Null
-$links = @(
-    (Join-Path $desktop 'BetterASF.lnk'),
-    (Join-Path $startDir 'BetterASF.lnk')
-)
-$ws = New-Object -ComObject WScript.Shell
-foreach ($lnk in $links) {{
-    $need = $true
-    if (Test-Path -LiteralPath $lnk) {{
-        try {{
-            $existing = $ws.CreateShortcut($lnk)
-            if ($existing.TargetPath -eq $target) {{ $need = $false }}
-        }} catch {{}}
-    }}
-    if ($need) {{
-        $sc = $ws.CreateShortcut($lnk)
-        $sc.TargetPath = $target
-        $sc.WorkingDirectory = $workdir
-        $sc.IconLocation = $icon
-        $sc.Description = 'BetterASF'
-        $sc.Save()
-    }}
-}}
-"""
-        encoded = base64.b64encode(ps.encode("utf-16le")).decode("ascii")
-        subprocess.Popen(
-            ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-EncodedCommand", encoded],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-        )
-        log("Shortcuts: Desktop and Start Menu check requested.")
+        target = Path(sys.executable).resolve()
+        workdir = target.parent
+        desktop = _get_shell_folder(0x0010)
+        programs = _get_shell_folder(0x0002)
+        links = []
+        if desktop:
+            links.append(desktop / f"{APP_NAME}.lnk")
+        if programs:
+            links.append(programs / APP_NAME / f"{APP_NAME}.lnk")
+        for lnk in links:
+            _sync_windows_shortcut(lnk, target, "", workdir, target, APP_NAME)
+        log("Shortcuts: Desktop and Start Menu verified.")
     except Exception as e:
         log(f"Shortcuts error: {e}")
 
 
-def ensure_program_files_install(cfg):
+def _file_sha256(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        while True:
+            chunk = f.read(1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest().lower()
 
+
+def _elevate_install_worker(worker_exe, target_exe, wait_pid, log_path):
+    import ctypes
+    from ctypes import wintypes
+    shell32 = ctypes.WinDLL("shell32", use_last_error=True)
+    shell32.ShellExecuteW.argtypes = [wintypes.HWND, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.LPCWSTR, ctypes.c_int]
+    shell32.ShellExecuteW.restype = ctypes.c_void_p
+    params = subprocess.list2cmdline([
+        "--install-worker",
+        "--target", str(target_exe),
+        "--wait-pid", str(int(wait_pid)),
+        "--log", str(log_path),
+    ])
+    rc = shell32.ShellExecuteW(None, "runas", str(worker_exe), params, str(Path(worker_exe).parent), 1)
+    return int(rc or 0)
+
+
+def _run_install_worker_from_args(argv):
+    if "--install-worker" not in argv:
+        return False
+    target = ""
+    wait_pid = 0
+    log_file = DATA_DIR / "self-install.log"
+    idx = 0
+    while idx < len(argv):
+        arg = argv[idx]
+        if arg == "--target" and idx + 1 < len(argv):
+            target = argv[idx + 1]
+            idx += 2
+            continue
+        if arg == "--wait-pid" and idx + 1 < len(argv):
+            try:
+                wait_pid = int(argv[idx + 1])
+            except Exception:
+                wait_pid = 0
+            idx += 2
+            continue
+        if arg == "--log" and idx + 1 < len(argv):
+            log_file = Path(argv[idx + 1])
+            idx += 2
+            continue
+        idx += 1
+
+    def write_log(msg):
+        try:
+            log_file.parent.mkdir(parents=True, exist_ok=True)
+            stamp = time.strftime("%Y-%m-%d %H:%M:%S")
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write(f"{stamp} {msg}\n")
+        except Exception:
+            pass
+
+    try:
+        src = Path(sys.executable).resolve()
+        dst = Path(target).resolve()
+        write_log(f"Install worker started. Source={src} Target={dst} WaitPID={wait_pid}")
+        if wait_pid > 0:
+            if not _wait_for_pid_exit(wait_pid, 60.0):
+                raise RuntimeError(f"Source process PID {wait_pid} did not exit in time.")
+            time.sleep(0.5)
+        own_pids = {int(os.getpid()), int(os.getppid())}
+        dst_key = _path_key(dst)
+        for pid, _, name in _system_process_entries():
+            if pid in own_pids or name.casefold() != "betterasf.exe":
+                continue
+            if _path_key(_system_process_exe_path(pid)) == dst_key:
+                write_log(f"Stopping old installed BetterASF PID {pid}")
+                _terminate_pid(pid)
+                _wait_for_pid_exit(pid, 10.0)
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        copied = False
+        last_err = None
+        for attempt in range(1, 11):
+            try:
+                shutil.copyfile(src, dst)
+                copied = True
+                write_log(f"Copy succeeded on attempt {attempt}.")
+                break
+            except Exception as exc:
+                last_err = exc
+                write_log(f"Copy attempt {attempt} failed: {exc}")
+                time.sleep(1.0)
+        if not copied:
+            raise RuntimeError(f"Unable to copy BetterASF.exe to Program Files: {last_err}")
+        if _file_sha256(src) != _file_sha256(dst):
+            raise RuntimeError("Copied file SHA-256 mismatch.")
+        write_log("SHA-256 verification succeeded.")
+        env = os.environ.copy()
+        env["BETTERASF_NO_SELF_INSTALL"] = "1"
+        subprocess.Popen([str(dst)], cwd=str(dst.parent), env=env)
+        write_log("Installed copy started.")
+    except Exception as exc:
+        write_log(f"Fatal: {exc}")
+        _show_startup_warning(f"Не удалось установить BetterASF в Program Files:\n{exc}")
+    return True
+
+
+def _cleanup_downloaded_updates():
+    try:
+        updates_dir = DATA_DIR / "updates"
+        if not updates_dir.is_dir():
+            return
+        cur_exe = _path_key(sys.executable) if is_frozen() else ""
+        for item in updates_dir.glob("BetterASF-*.exe"):
+            if _path_key(item) != cur_exe:
+                try:
+                    item.unlink(missing_ok=True)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+
+def ensure_program_files_install(cfg):
     enabled = str(cfg.get("self_install_to_program_files", "true")).lower() in ("1", "true", "yes", "on")
     if not enabled or os.name != "nt" or not is_frozen():
         return False
     if os.environ.get("BETTERASF_NO_SELF_INSTALL") == "1":
         return False
-
     src = Path(sys.executable).resolve()
     pf = os.environ.get("ProgramFiles") or os.environ.get("PROGRAMFILES")
     if not pf:
@@ -473,102 +1078,20 @@ def ensure_program_files_install(cfg):
         return False
     install_dir = Path(pf) / APP_NAME
     dst = install_dir / f"{APP_NAME}.exe"
-
     if _is_under_path(src, install_dir):
+        _cleanup_downloaded_updates()
         return False
-
     try:
-        import base64
         install_log = DATA_DIR / "self-install.log"
-        ps = f"""
-$ErrorActionPreference = 'Stop'
-$src = {_ps_quote(src)}
-$dstDir = {_ps_quote(install_dir)}
-$dst = {_ps_quote(dst)}
-$oldPid = {os.getpid()}
-$log = {_ps_quote(install_log)}
-function Log($m) {{
-    try {{
-        $dir = Split-Path -Parent $log
-        New-Item -ItemType Directory -Force -Path $dir | Out-Null
-        Add-Content -LiteralPath $log -Encoding UTF8 -Value ((Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + ' ' + $m)
-    }} catch {{}}
-}}
-try {{
-    Log 'Self-install started.'
-    Log ('Source: ' + $src)
-    Log ('Target: ' + $dst)
-    New-Item -ItemType Directory -Force -Path $dstDir | Out-Null
-
-    Write-Host 'BetterASF self-install' -ForegroundColor Cyan
-    Write-Host ('Source: ' + $src)
-    Write-Host ('Target: ' + $dst)
-
-    Log 'Stopping old installed BetterASF processes if any.'
-    try {{
-        $oldInstalled = Get-CimInstance Win32_Process -Filter "Name='BetterASF.exe'" | Where-Object {{ $_.ExecutablePath -eq $dst -and $_.ProcessId -ne $oldPid }}
-        foreach ($p in $oldInstalled) {{
-            Log ('Stopping old installed process PID ' + $p.ProcessId)
-            Write-Host ('Stopping old installed BetterASF PID ' + $p.ProcessId) -ForegroundColor Yellow
-            Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue
-        }}
-        Start-Sleep -Milliseconds 800
-    }} catch {{ Log ('Process cleanup warning: ' + $_.Exception.Message) }}
-
-    $copied = $false
-    for ($i = 1; $i -le 10; $i++) {{
-        try {{
-            Write-Host ('Copy attempt ' + $i + '/10...') -ForegroundColor Cyan
-            Copy-Item -LiteralPath $src -Destination $dst -Force
-            $copied = $true
-            Log 'Copy succeeded.'
-            break
-        }} catch {{
-            Log ('Copy attempt ' + $i + ' failed: ' + $_.Exception.Message)
-            Write-Host ('Copy attempt failed: ' + $_.Exception.Message) -ForegroundColor Yellow
-            Start-Sleep -Seconds 1
-        }}
-    }}
-    if (-not $copied) {{ throw 'Unable to copy BetterASF.exe to Program Files. See self-install.log.' }}
-
-    try {{ Unblock-File -LiteralPath $dst -ErrorAction SilentlyContinue }} catch {{}}
-
-    $srcHash = (Get-FileHash -LiteralPath $src -Algorithm SHA256).Hash
-    $dstHash = (Get-FileHash -LiteralPath $dst -Algorithm SHA256).Hash
-    if ($srcHash -ne $dstHash) {{ throw 'Copied file hash mismatch.' }}
-    Log 'Hash verification succeeded.'
-
-    $env:BETTERASF_NO_SELF_INSTALL = '1'
-    Start-Process -FilePath $dst -WorkingDirectory $dstDir
-    Log 'Installed copy started.'
-    Write-Host 'Installed copy started.' -ForegroundColor Green
-
-    try {{ Wait-Process -Id $oldPid -Timeout 45 -ErrorAction SilentlyContinue }} catch {{}}
-    Start-Sleep -Milliseconds 1000
-    try {{
-        if ((Test-Path -LiteralPath $src) -and ($src -ne $dst)) {{
-            Remove-Item -LiteralPath $src -Force -ErrorAction SilentlyContinue
-            Log 'Original file removal requested.'
-        }}
-    }} catch {{ Log ('Original removal failed: ' + $_.Exception.Message) }}
-}} catch {{
-    Log ('Fatal: ' + $_.Exception.Message)
-}}
-"""
-        encoded = base64.b64encode(ps.encode("utf-16le")).decode("ascii")
-        params = f'-NoProfile -ExecutionPolicy Bypass -EncodedCommand {encoded}'
-        import ctypes
-        rc = ctypes.windll.shell32.ShellExecuteW(None, "runas", "powershell.exe", params, None, 1)
-        if int(rc) <= 32:
-            log(f"Self-install: elevation was not started, ShellExecute={int(rc)}")
+        rc = _elevate_install_worker(src, dst, os.getpid(), install_log)
+        if rc <= 32:
+            log(f"Self-install: elevation was not started, ShellExecute={rc}")
             return False
-        log(f"Self-install: elevated copy task started. Target: {dst}")
-        log(f"Self-install: details will be written to {install_log}")
+        log(f"Self-install: elevated worker started. Target: {dst}")
         return True
     except Exception as e:
         log(f"Self-install error: {e}")
         return False
-
 
 def find_asf_executable(configured):
     if configured:
@@ -642,6 +1165,151 @@ def extract_embedded_asf():
     return str(runtime_exe) if runtime_exe.exists() else None
 
 
+def _asf_asset_name():
+    machine = (os.environ.get("PROCESSOR_ARCHITEW6432") or platform.machine()).lower()
+    if machine in ("arm64", "aarch64"):
+        return "ASF-win-arm64.zip"
+    if machine in ("x86", "i386", "i686"):
+        return "ASF-win-x86.zip"
+    return "ASF-win-x64.zip"
+
+
+def _download_asf_asset(asset, target):
+    expected_size = int(asset.get("size") or 0)
+    limit = 256 * 1024 * 1024
+    if expected_size and expected_size > limit:
+        raise RuntimeError("ASF archive exceeds the download size limit.")
+    url = str(asset.get("browser_download_url") or "")
+    if not url.startswith("https://"):
+        raise RuntimeError("ASF release asset URL is invalid.")
+    digest = hashlib.sha256()
+    total = 0
+    request = urllib.request.Request(url, headers={"User-Agent": f"{APP_NAME}/{APP_VERSION}", "Accept": "application/octet-stream"})
+    with urllib.request.urlopen(request, timeout=45) as response, open(target, "wb") as output:
+        while True:
+            block = response.read(1024 * 1024)
+            if not block:
+                break
+            total += len(block)
+            if total > limit:
+                raise RuntimeError("ASF archive exceeds the download size limit.")
+            digest.update(block)
+            output.write(block)
+    if total < 1024 * 1024:
+        raise RuntimeError("ASF archive download is unexpectedly small.")
+    if expected_size and total != expected_size:
+        raise RuntimeError("ASF archive size does not match GitHub release metadata.")
+    expected_digest = str(asset.get("digest") or "").strip().lower()
+    if expected_digest.startswith("sha256:") and digest.hexdigest().lower() != expected_digest.split(":", 1)[1]:
+        raise RuntimeError("ASF archive SHA-256 does not match GitHub release metadata.")
+
+
+def _extract_asf_archive(archive, destination):
+    max_files = 5000
+    max_unpacked = 768 * 1024 * 1024
+    with zipfile.ZipFile(archive) as source:
+        members = source.infolist()
+        if not members or len(members) > max_files:
+            raise RuntimeError("ASF archive contains an invalid number of files.")
+        total = sum(max(0, int(member.file_size)) for member in members)
+        if total > max_unpacked:
+            raise RuntimeError("ASF archive exceeds the unpacked size limit.")
+        root = destination.resolve()
+        for member in members:
+            name = str(member.filename or "")
+            target = (destination / name).resolve()
+            try:
+                target.relative_to(root)
+            except Exception:
+                raise RuntimeError("ASF archive contains an unsafe path.")
+            if member.is_dir():
+                target.mkdir(parents=True, exist_ok=True)
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with source.open(member, "r") as input_file, open(target, "wb") as output_file:
+                shutil.copyfileobj(input_file, output_file, 1024 * 1024)
+
+
+def download_official_asf_runtime():
+    if os.name != "nt":
+        return None
+    runtime = DATA_DIR / "ASF-runtime"
+    existing = runtime / "ArchiSteamFarm.exe"
+    if existing.is_file():
+        return str(existing)
+    asset_name = _asf_asset_name()
+    log(f"ASF не найден. Скачиваю официальный {asset_name} из GitHub...")
+    try:
+        release = _github_json(f"https://api.github.com/repos/{ASF_GITHUB_REPO}/releases/latest", timeout=20)
+        assets = release.get("assets") if isinstance(release, dict) else []
+        asset = next((item for item in assets or [] if str(item.get("name") or "").casefold() == asset_name.casefold()), None)
+        if not isinstance(asset, dict):
+            raise RuntimeError(f"GitHub release does not include {asset_name}.")
+        with tempfile.TemporaryDirectory(prefix="betterasf-asf-", dir=str(DATA_DIR)) as temp:
+            work = Path(temp)
+            archive = work / asset_name
+            unpacked = work / "unpacked"
+            _download_asf_asset(asset, archive)
+            _extract_asf_archive(archive, unpacked)
+            executable = next((path for path in unpacked.rglob("ArchiSteamFarm.exe") if path.is_file()), None)
+            if not executable:
+                raise RuntimeError("Downloaded ASF archive does not contain ArchiSteamFarm.exe.")
+            source_root = executable.parent
+            backup = DATA_DIR / "ASF-runtime.previous"
+            external_config = DATA_DIR / "config"
+            old_config = runtime / "config"
+            if old_config.is_dir() and not external_config.exists() and not os.path.islink(str(old_config)):
+                shutil.copytree(old_config, external_config)
+            if backup.exists():
+                shutil.rmtree(backup, ignore_errors=True)
+            moved_old = False
+            if runtime.exists() or os.path.lexists(str(runtime)):
+                runtime.replace(backup)
+                moved_old = True
+            try:
+                source_root.replace(runtime)
+            except Exception:
+                if moved_old and backup.exists() and not runtime.exists():
+                    backup.replace(runtime)
+                raise
+            shutil.rmtree(backup, ignore_errors=True)
+        link_external_config(runtime)
+        version = str(release.get("tag_name") or release.get("name") or "unknown")
+        marker = DATA_DIR / "asf-runtime-source.json"
+        marker.write_text(json.dumps({"source": ASF_GITHUB_REPO, "version": version, "asset": asset_name, "downloadedAt": int(time.time())}), encoding="utf-8")
+        log(f"ASF скачан и распакован: {runtime} ({version}, {asset_name}).")
+        return str(runtime / "ArchiSteamFarm.exe")
+    except Exception as exc:
+        log(f"Не удалось автоматически скачать ASF: {exc}")
+        return None
+
+
+def _remove_readonly_entry(func, path, _exc_info):
+    try:
+        os.chmod(path, 0o700)
+        func(path)
+    except Exception:
+        pass
+
+
+def _remove_tree_safe(target):
+    path_str = str(target)
+    if not os.path.lexists(path_str):
+        return
+    if os.path.islink(path_str):
+        os.unlink(path_str)
+        return
+    try:
+        os.rmdir(path_str)
+        return
+    except Exception:
+        pass
+    if os.path.isdir(path_str):
+        shutil.rmtree(path_str, onerror=_remove_readonly_entry)
+    else:
+        os.remove(path_str)
+
+
 def reset_embedded_asf_runtime():
     embedded = RES_DIR / "_asf"
     runtime = DATA_DIR / "ASF-runtime"
@@ -649,18 +1317,9 @@ def reset_embedded_asf_runtime():
         log("ASF recovery: embedded ASF is not available, runtime reset skipped.")
         return False
     try:
-        import shutil
         if runtime.exists() or os.path.lexists(str(runtime)):
             log(f"ASF recovery: removing broken runtime {runtime}")
-            shutil.rmtree(str(runtime), ignore_errors=True)
-            if os.path.lexists(str(runtime)):
-                try:
-                    os.rmdir(str(runtime))
-                except Exception:
-                    if os.name == "nt":
-                        subprocess.run(["cmd", "/c", "rd", "/s", "/q", str(runtime)],
-                                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                                       check=False)
+            _remove_tree_safe(runtime)
         return True
     except Exception as e:
         log(f"ASF recovery: runtime cleanup failed: {e}")
@@ -680,20 +1339,7 @@ def link_external_config(runtime):
             ext_cfg.mkdir(parents=True, exist_ok=True)
     if os.path.lexists(str(rt_cfg)):
         try:
-            if os.path.islink(str(rt_cfg)):
-                os.unlink(str(rt_cfg))
-            elif os.path.isdir(str(rt_cfg)):
-                import shutil
-                shutil.rmtree(str(rt_cfg), ignore_errors=True)
-                if os.path.lexists(str(rt_cfg)):
-                    try:
-                        os.rmdir(str(rt_cfg))
-                    except Exception:
-                        subprocess.run(["cmd", "/c", "rd", "/s", "/q", str(rt_cfg)],
-                                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                                       check=False)
-            else:
-                os.remove(str(rt_cfg))
+            _remove_tree_safe(rt_cfg)
         except Exception:
             pass
     try:
@@ -701,12 +1347,10 @@ def link_external_config(runtime):
     except Exception:
         try:
             if os.name == "nt" and not os.path.lexists(str(rt_cfg)):
-                subprocess.run(["cmd", "/c", "mklink", "/J", str(rt_cfg), str(ext_cfg)],
-                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                               check=False)
+                import _winapi
+                _winapi.CreateJunction(str(ext_cfg), str(rt_cfg))
         except Exception:
             pass
-
 
 BETTERASF_CLAN_ID = "103582791475681171"
 
@@ -881,7 +1525,7 @@ class ASFProcess:
                 if self.job and _assign_to_job(self.job, self.proc.pid):
                     log("  ASF attached to Job Object (explicitly enabled).")
                 else:
-                    log("  Job Object was not assigned; taskkill fallback will be used.")
+                    log("  Job Object was not assigned; direct process stop will be used.")
         except Exception as e:
             log(f"  ОШИБКА запуска ASF: {e}")
 
@@ -892,20 +1536,15 @@ class ASFProcess:
         self.replaced_by_self_update = True
 
     def _stop_self_update_successor(self):
-
         if os.name != "nt":
             return
         try:
-            target = _ps_quote(str(Path(self.exe).resolve()))
-            script = (
-                "$target=" + target + "; "
-                "Get-CimInstance Win32_Process -Filter \"Name='ArchiSteamFarm.exe'\" | "
-                "Where-Object { $_.ExecutablePath -eq $target } | "
-                "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
-            )
-            subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
-                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), timeout=15,
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+            target_key = _path_key(Path(self.exe).resolve())
+            for pid, _, name in _system_process_entries():
+                if name.casefold() != "archisteamfarm.exe":
+                    continue
+                if _path_key(_system_process_exe_path(pid)) == target_key:
+                    _terminate_pid(pid)
         except Exception as exc:
             log(f"ASF successor stop error: {exc}")
 
@@ -935,15 +1574,19 @@ class ASFProcess:
         log(f"Остановка ASF (PID {pid})...")
         if os.name == "nt":
             try:
-                subprocess.run(
-                    ["taskkill", "/PID", str(pid), "/T", "/F"],
-                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                    timeout=15, check=False,
-                )
+                children = _descendants(pid, _child_process_map())
+                self.proc.terminate()
+                try:
+                    self.proc.wait(timeout=5)
+                except Exception:
+                    _terminate_pid(pid)
+                for child_pid in children:
+                    _terminate_pid(child_pid)
             except Exception as e:
-                log(f"  taskkill error: {e}")
+                log(f"  stop error: {e}")
             try:
-                self.proc.kill()
+                if self.proc.poll() is None:
+                    self.proc.kill()
             except Exception:
                 pass
             self._close_job()
@@ -1020,107 +1663,13 @@ def _process_memory_bytes(pid):
 
 def _child_process_map():
     result = {}
-    if os.name == "nt":
-        try:
-            import ctypes
-            from ctypes import wintypes
-
-            class PROCESSENTRY32W(ctypes.Structure):
-                _fields_ = [
-                    ("dwSize", wintypes.DWORD),
-                    ("cntUsage", wintypes.DWORD),
-                    ("th32ProcessID", wintypes.DWORD),
-                    ("th32DefaultHeapID", ctypes.c_size_t),
-                    ("th32ModuleID", wintypes.DWORD),
-                    ("cntThreads", wintypes.DWORD),
-                    ("th32ParentProcessID", wintypes.DWORD),
-                    ("pcPriClassBase", ctypes.c_long),
-                    ("dwFlags", wintypes.DWORD),
-                    ("szExeFile", wintypes.WCHAR * 260),
-                ]
-
-            kernel32 = ctypes.windll.kernel32
-            snapshot = kernel32.CreateToolhelp32Snapshot(0x00000002, 0)
-            invalid = ctypes.c_void_p(-1).value
-            if snapshot == invalid:
-                return result
-            try:
-                entry = PROCESSENTRY32W()
-                entry.dwSize = ctypes.sizeof(entry)
-                current = kernel32.Process32FirstW(snapshot, ctypes.byref(entry))
-                while current:
-                    result.setdefault(int(entry.th32ParentProcessID), []).append(int(entry.th32ProcessID))
-                    current = kernel32.Process32NextW(snapshot, ctypes.byref(entry))
-            finally:
-                kernel32.CloseHandle(snapshot)
-        except Exception:
-            pass
-        return result
-    try:
-        for path in Path("/proc").iterdir():
-            if not path.name.isdigit():
-                continue
-            try:
-                stat = (path / "stat").read_text(encoding="utf-8", errors="ignore")
-                rest = stat[stat.rfind(")") + 2:].split()
-                parent = int(rest[1])
-                result.setdefault(parent, []).append(int(path.name))
-            except Exception:
-                pass
-    except Exception:
-        pass
+    for pid, ppid, _ in _system_process_entries():
+        result.setdefault(ppid, []).append(pid)
     return result
 
 
 def _process_name_map():
-    result = {}
-    if os.name == "nt":
-        try:
-            import ctypes
-            from ctypes import wintypes
-
-            class PROCESSENTRY32W(ctypes.Structure):
-                _fields_ = [
-                    ("dwSize", wintypes.DWORD),
-                    ("cntUsage", wintypes.DWORD),
-                    ("th32ProcessID", wintypes.DWORD),
-                    ("th32DefaultHeapID", ctypes.c_size_t),
-                    ("th32ModuleID", wintypes.DWORD),
-                    ("cntThreads", wintypes.DWORD),
-                    ("th32ParentProcessID", wintypes.DWORD),
-                    ("pcPriClassBase", ctypes.c_long),
-                    ("dwFlags", wintypes.DWORD),
-                    ("szExeFile", wintypes.WCHAR * 260),
-                ]
-
-            kernel32 = ctypes.windll.kernel32
-            snapshot = kernel32.CreateToolhelp32Snapshot(0x00000002, 0)
-            invalid = ctypes.c_void_p(-1).value
-            if snapshot == invalid:
-                return result
-            try:
-                entry = PROCESSENTRY32W()
-                entry.dwSize = ctypes.sizeof(entry)
-                current = kernel32.Process32FirstW(snapshot, ctypes.byref(entry))
-                while current:
-                    result[int(entry.th32ProcessID)] = str(entry.szExeFile).lower()
-                    current = kernel32.Process32NextW(snapshot, ctypes.byref(entry))
-            finally:
-                kernel32.CloseHandle(snapshot)
-        except Exception:
-            pass
-        return result
-    try:
-        for path in Path("/proc").iterdir():
-            if path.name.isdigit():
-                try:
-                    result[int(path.name)] = (path / "comm").read_text(encoding="utf-8", errors="ignore").strip().lower()
-                except Exception:
-                    pass
-    except Exception:
-        pass
-    return result
-
+    return {pid: name.lower() for pid, _, name in _system_process_entries()}
 
 def _descendants(root_pid, process_map):
     result = []
@@ -1319,7 +1868,6 @@ def _download_file(url, target):
 
 
 def install_github_update(exit_callback=None):
-
     info = check_github_update()
     if not info.get("ok"):
         return {"ok": False, "message": info.get("message") or "Update check failed."}
@@ -1351,124 +1899,23 @@ def install_github_update(exit_callback=None):
         dst = install_dir / f"{APP_NAME}.exe"
         update_log = DATA_DIR / "update.log"
 
-        import base64
-        ps = f"""
-$ErrorActionPreference = 'Stop'
-$Host.UI.RawUI.WindowTitle = 'BetterASF Updater'
-Clear-Host
-Write-Host 'BetterASF updater started...' -ForegroundColor Cyan
-$url = {_ps_quote(url)}
-$download = {_ps_quote(downloaded)}
-$dstDir = {_ps_quote(install_dir)}
-$dst = {_ps_quote(dst)}
-$oldPid = {os.getpid()}
-$log = {_ps_quote(update_log)}
-function Log($m) {{
-    try {{
-        $dir = Split-Path -Parent $log
-        New-Item -ItemType Directory -Force -Path $dir | Out-Null
-        Add-Content -LiteralPath $log -Encoding UTF8 -Value ((Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + ' ' + $m)
-    }} catch {{}}
-}}
-function Download-WithProgress($source, $target) {{
-    Write-Host '[1/4] Downloading BetterASF update...' -ForegroundColor Cyan
-    Write-Host ('URL: ' + $source)
-    $dir = Split-Path -Parent $target
-    New-Item -ItemType Directory -Force -Path $dir | Out-Null
-    $tmp = $target + '.part'
-    if (Test-Path -LiteralPath $tmp) {{ Remove-Item -LiteralPath $tmp -Force }}
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
-    $req = [Net.HttpWebRequest]::Create($source)
-    $req.UserAgent = 'BetterASF-Updater'
-    $res = $req.GetResponse()
-    try {{
-        $total = [int64]$res.ContentLength
-        $input = $res.GetResponseStream()
-        $output = [IO.File]::Open($tmp, [IO.FileMode]::Create, [IO.FileAccess]::Write, [IO.FileShare]::None)
-        try {{
-            $buffer = New-Object byte[] 1048576
-            [int64]$readTotal = 0
-            $lastShown = -1
-            while (($read = $input.Read($buffer, 0, $buffer.Length)) -gt 0) {{
-                $output.Write($buffer, 0, $read)
-                $readTotal += $read
-                if ($total -gt 0) {{
-                    $pct = [int](($readTotal * 100) / $total)
-                    Write-Progress -Activity 'Downloading BetterASF' -Status ($pct.ToString() + '%') -PercentComplete $pct
-                    if ($pct -ge ($lastShown + 10)) {{
-                        Write-Host ('  ' + $pct + '%')
-                        $lastShown = $pct
-                    }}
-                }} else {{
-                    Write-Progress -Activity 'Downloading BetterASF' -Status ($readTotal.ToString() + ' bytes')
-                }}
-            }}
-        }} finally {{
-            if ($output) {{ $output.Dispose() }}
-            if ($input) {{ $input.Dispose() }}
-        }}
-    }} finally {{
-        if ($res) {{ $res.Dispose() }}
-    }}
-    Move-Item -LiteralPath $tmp -Destination $target -Force
-    Write-Progress -Activity 'Downloading BetterASF' -Completed
-    Write-Host '[1/4] Download complete.' -ForegroundColor Green
-}}
-try {{
-    Log 'Update started.'
-    Log ('Download URL: ' + $url)
-    Log ('Target exe: ' + $dst)
+        log(f"Updater: downloading {url} -> {downloaded}")
+        _download_file(url, downloaded)
+        if not downloaded.is_file() or downloaded.stat().st_size < 1024 * 1024:
+            raise RuntimeError("Downloaded update file is incomplete.")
+        with open(downloaded, "rb") as f:
+            if f.read(2) != b"MZ":
+                raise RuntimeError("Downloaded update is not a valid Windows executable.")
 
-    Write-Host 'BetterASF updater' -ForegroundColor Cyan
-    Write-Host 'The current BetterASF and ASF processes will be closed before installation.'
-    Write-Host ''
+        rc = _elevate_install_worker(downloaded, dst, os.getpid(), update_log)
+        if rc <= 32:
+            return {"ok": False, "message": f"Elevation was not started, ShellExecute={rc}"}
 
-    Write-Host '[0/4] Waiting for BetterASF to close...' -ForegroundColor Cyan
-    try {{ Wait-Process -Id $oldPid -Timeout 90 -ErrorAction SilentlyContinue }} catch {{}}
-    Start-Sleep -Milliseconds 1200
-
-    Download-WithProgress $url $download
-
-    Write-Host '[2/4] Preparing Program Files directory...' -ForegroundColor Cyan
-    New-Item -ItemType Directory -Force -Path $dstDir | Out-Null
-
-    Write-Host '[3/4] Installing update...' -ForegroundColor Cyan
-    Copy-Item -LiteralPath $download -Destination $dst -Force
-    try {{ Unblock-File -LiteralPath $dst -ErrorAction SilentlyContinue }} catch {{}}
-    Log 'Copy succeeded.'
-
-    Write-Host '[4/4] Starting updated BetterASF...' -ForegroundColor Cyan
-    $env:BETTERASF_NO_SELF_INSTALL = '1'
-    Start-Process -FilePath $dst -WorkingDirectory $dstDir
-    Log 'Updated BetterASF started.'
-    try {{ Remove-Item -LiteralPath $download -Force -ErrorAction SilentlyContinue }} catch {{}}
-    Write-Host 'Done. This window will close in 3 seconds.' -ForegroundColor Green
-    Start-Sleep -Seconds 3
-}} catch {{
-    $msg = $_.Exception.Message
-    Log ('Fatal: ' + $msg)
-    Write-Host ''
-    Write-Host ('Update failed: ' + $msg) -ForegroundColor Red
-    Write-Host ('Log: ' + $log) -ForegroundColor Yellow
-    Read-Host 'Press Enter to close'
-}}
-"""
-        script_path = updates_dir / "update-betterasf.ps1"
-        script_path.parent.mkdir(parents=True, exist_ok=True)
-        script_path.write_text(ps, encoding="utf-8-sig")
-        params = f'-NoProfile -ExecutionPolicy Bypass -File "{script_path}"'
-        import ctypes
-        rc = ctypes.windll.shell32.ShellExecuteW(None, "runas", "powershell.exe", params, None, 1)
-        if int(rc) <= 32:
-            return {"ok": False, "message": f"Elevation was not started, ShellExecute={int(rc)}"}
-
-        log(f"Updater: elevated updater started, script={script_path}, log={update_log}")
-        return {"ok": True, "message": "Updater started. BetterASF and ASF will close now.", "version": version}
+        log(f"Updater: elevated worker started, log={update_log}")
+        return {"ok": True, "message": "Update downloaded. BetterASF and ASF will restart now.", "version": version}
     except Exception as e:
         log(f"Updater error: {e}")
         return {"ok": False, "message": str(e)}
-
-
 
 def _merge_plugin_catalog(base, incoming):
     by_id = {item["id"]: item for item in base}
@@ -2104,16 +2551,8 @@ class EventLogService:
         self.lock = threading.RLock()
         self.events = []
         self.next_id = 0
-        self._load()
-
-    def _load(self):
         try:
-            lines = EVENT_LOG_FILE.read_text(encoding="utf-8", errors="ignore").splitlines()[-700:]
-            for line in lines:
-                item = json.loads(line)
-                if isinstance(item, dict) and item.get("message"):
-                    self.events.append(item)
-                    self.next_id = max(self.next_id, int(item.get("id") or 0))
+            EVENT_LOG_FILE.unlink(missing_ok=True)
         except Exception:
             pass
 
@@ -2124,13 +2563,6 @@ class EventLogService:
             self.events.append(item)
             if len(self.events) > 700:
                 self.events = self.events[-700:]
-            try:
-                with open(EVENT_LOG_FILE, "a", encoding="utf-8") as file:
-                    file.write(json.dumps(item, ensure_ascii=False) + "\n")
-                if EVENT_LOG_FILE.stat().st_size > 2 * 1024 * 1024:
-                    EVENT_LOG_FILE.write_text("\n".join(json.dumps(event, ensure_ascii=False) for event in self.events) + "\n", encoding="utf-8")
-            except Exception:
-                pass
             return item
 
     def status(self, since=0):
@@ -2141,10 +2573,6 @@ class EventLogService:
         with self.lock:
             self.events = []
             self.next_id = 0
-            try:
-                EVENT_LOG_FILE.unlink(missing_ok=True)
-            except Exception:
-                pass
         return {"ok": True}
 
 
@@ -2219,6 +2647,7 @@ class DiagnosticsService:
         return {
             "ok": True,
             "app_version": APP_VERSION,
+            "data_dir": str(DATA_DIR),
             "asf_runtime": runtime or "",
             "asf_ipc": ipc_ready("127.0.0.1", self.bot_service.port),
             "bot_count": bot_count,
@@ -2283,6 +2712,39 @@ class BotService:
                 last_error = exc
         raise RuntimeError(str(last_error or "ASF unavailable"))
 
+    @staticmethod
+    def _config_path(name):
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", str(name or "")):
+            return None
+        return DATA_DIR / "config" / f"{name}.json"
+
+    def _stored_enabled(self, name, default=True):
+        path = self._config_path(name)
+        if not path or not path.is_file():
+            return default
+        try:
+            return json.loads(path.read_text(encoding="utf-8")).get("Enabled") is not False
+        except Exception:
+            return default
+
+    def _save_enabled(self, name, enabled):
+        path = self._config_path(name)
+        if not path:
+            return False
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            data = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+            if not isinstance(data, dict):
+                return False
+            data["Enabled"] = bool(enabled)
+            temporary = path.with_suffix(path.suffix + ".part")
+            temporary.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+            temporary.replace(path)
+            return True
+        except Exception as exc:
+            log(f"Bot enabled state save error: {exc}")
+            return False
+
     def bots(self):
         data = self.request("/Api/Bot/ASF")
         bots = data.get("Result") if isinstance(data, dict) else {}
@@ -2295,6 +2757,9 @@ class BotService:
             for name, bot in bots.items():
                 if not isinstance(bot, dict):
                     continue
+                stored_enabled = self._stored_enabled(name, (bot.get("BotConfig") or {}).get("Enabled") is not False)
+                bot.setdefault("BotConfig", {})["Enabled"] = stored_enabled
+                bot["Enabled"] = stored_enabled
                 if bot.get("KeepRunning"):
                     self.running_since.setdefault(name, now)
                 else:
@@ -2320,10 +2785,9 @@ class BotService:
         if not isinstance(bot, dict):
             return {"ok": False, "message": "Bot was not found."}
         if action in ("enable", "disable"):
-            config = dict(bot.get("BotConfig") or {})
             enabled = action == "enable"
-            config["Enabled"] = enabled
-            self.request("/Api/Bot/" + urllib.parse.quote(name), "POST", {"BotConfig": config})
+            if not self._save_enabled(name, enabled):
+                return {"ok": False, "message": "Bot config could not be saved."}
             if not enabled and bot.get("KeepRunning"):
                 self.request("/Api/Bot/" + urllib.parse.quote(name) + "/Stop", "POST", {})
             return {"ok": True, "enabled": enabled}
@@ -2500,6 +2964,7 @@ class LoginRequestService:
         self.event_id = 0
         self.started = False
         self.thread = None
+        self.error_after = 0.0
         self._load_state()
 
     def _load_state(self):
@@ -2562,8 +3027,10 @@ class LoginRequestService:
             try:
                 self._sync()
             except Exception as exc:
-                with self.lock:
-                    self._event("login_request_poll_error", error=str(exc))
+                if time.time() >= self.error_after:
+                    with self.lock:
+                        self._event("login_request_poll_error", error=str(exc))
+                    self.error_after = time.time() + 60
             self.stop_event.wait(5)
 
     def status(self, since=0):
@@ -2607,6 +3074,7 @@ class HourFarmService:
         self.startup_done = False
         self.startup_started_at = 0.0
         self.thread = None
+        self.error_after = 0.0
         self._load_state()
 
     def _load_state(self):
@@ -2769,7 +3237,7 @@ class HourFarmService:
             settings = self._settings()
             if not settings["api_key"]:
                 self._event("hour_service_need_api_key")
-                return {"ok": False, "message": "Steam Web API key is required."}
+                return {"ok": False, "needApiKey": True, "message": "Steam Web API key is required."}
             try:
                 bots = self._bots()
             except Exception as exc:
@@ -2909,7 +3377,9 @@ class HourFarmService:
                 self._auto_after_cards(bots, settings)
                 self._reapply(bots, settings)
             except Exception as exc:
-                self._event("hour_service_poll_error", error=str(exc))
+                if time.time() >= self.error_after:
+                    self._event("hour_service_poll_error", error=str(exc))
+                    self.error_after = time.time() + 60
             self.stop_event.wait(7)
 
 
@@ -3170,7 +3640,7 @@ def make_handler(ui_path, asf_host, asf_port, inject, stats_provider=None, exit_
                     url = ("https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/"
                            f"?key={api_key}&steamid={steamid}"
                            "&include_played_free_games=1&include_appinfo=0&format=json")
-                    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                    req = urllib.request.Request(url, headers={"User-Agent": f"{APP_NAME}/{APP_VERSION}"})
                     with urllib.request.urlopen(req, timeout=15) as r:
                         raw = r.read().decode("utf-8", "ignore")
                     data = json.loads(raw)
@@ -3222,6 +3692,7 @@ def make_handler(ui_path, asf_host, asf_port, inject, stats_provider=None, exit_
                 payload = {
                     "asf_status": RUNTIME.get("asf_status", "unknown"),
                     "asf_status_message": RUNTIME.get("asf_status_message", ""),
+                    "ui_ready": bool(RUNTIME.get("ui_ready", False)),
                 }
                 self._send_bytes(json.dumps(payload).encode(), "application/json")
             elif self.path.startswith("/__check_update"):
@@ -3296,7 +3767,19 @@ def make_handler(ui_path, asf_host, asf_port, inject, stats_provider=None, exit_
                 self._serve_static()
 
         def do_POST(self):
-            if self.path.startswith("/__settings"):
+            if self.path.startswith("/__ui_ready"):
+                RUNTIME["ui_ready"] = True
+                log("UI ready.")
+                self._send_bytes(json.dumps({"ok": True}).encode(), "application/json")
+            elif self.path.startswith("/__ui_error"):
+                try:
+                    length = int(self.headers.get("Content-Length", 0) or 0)
+                    payload = json.loads(self.rfile.read(length).decode("utf-8", "ignore") or "{}")
+                    log("UI error: " + str(payload.get("message") or "unknown"))
+                except Exception:
+                    pass
+                self._send_bytes(json.dumps({"ok": True}).encode(), "application/json")
+            elif self.path.startswith("/__settings"):
                 self._settings()
             elif self.path.startswith("/__theme") or self.path == "/__custom_theme":
                 self._theme()
@@ -3522,8 +4005,9 @@ def configure_webview2_low_memory(cfg):
     except Exception:
         pass
 
-    aggressive = str(cfg.get("webview_aggressive", "true")).lower() in ("1", "true", "yes", "on")
-    single_process = str(cfg.get("webview_single_process", "true")).lower() in ("1", "true", "yes", "on")
+    safe_mode = str(cfg.get("webview_render_safe_mode", "true")).lower() in ("1", "true", "yes", "on")
+    aggressive = False if safe_mode else str(cfg.get("webview_aggressive", "false")).lower() in ("1", "true", "yes", "on")
+    single_process = False if safe_mode else str(cfg.get("webview_single_process", "false")).lower() in ("1", "true", "yes", "on")
     disable_gpu = str(cfg.get("webview_disable_gpu", "false")).lower() in ("1", "true", "yes", "on")
     in_process_gpu = str(cfg.get("webview_in_process_gpu", "false")).lower() in ("1", "true", "yes", "on")
 
@@ -3574,8 +4058,7 @@ def configure_webview2_low_memory(cfg):
 
 
             "--disable-site-isolation-trials",
-            "--disable-web-security",
-            "--disable-features=IsolateOrigins,site-per-process,CalculateNativeWinOcclusion,BackForwardCache,AcceptCHFrame,AutofillServerCommunication,OptimizationHints,MediaRouter,InterestFeedContentSuggestions,msSmartScreenProtection",
+            "--disable-features=IsolateOrigins,site-per-process,CalculateNativeWinOcclusion,BackForwardCache,AcceptCHFrame,AutofillServerCommunication,OptimizationHints,MediaRouter,InterestFeedContentSuggestions",
             "--disable-breakpad",
             "--disable-crash-reporter",
             "--disable-hang-monitor",
@@ -3608,7 +4091,7 @@ def configure_webview2_low_memory(cfg):
     os.environ["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = value
     log(
         "WebView2 Low Memory: включён "
-        f"(aggressive={aggressive}, single_process={single_process}, in_process_gpu={in_process_gpu}, disable_gpu={disable_gpu})."
+        f"(safe_mode={safe_mode}, aggressive={aggressive}, single_process={single_process}, in_process_gpu={in_process_gpu}, disable_gpu={disable_gpu})."
     )
     log(f"WebView2 args: {value}")
 
@@ -3864,6 +4347,8 @@ def monitor_ipc(host, port, timeout, asf_holder):
 
 
 def main():
+    if _run_install_worker_from_args(sys.argv[1:]):
+        return
     cfg = load_config()
     host = cfg["ipc_host"]
     port = int(cfg["ipc_port"])
@@ -3881,8 +4366,21 @@ def main():
     log(f"frozen={is_frozen()}  APP_DIR={APP_DIR}")
     log(f"DATA_DIR={DATA_DIR}")
     log(f"UI_DIR={UI_DIR}")
-    if ensure_program_files_install(cfg):
+    _flush_data_migration_notices()
+    if not acquire_instance_lock():
+        message = "Другой экземпляр BetterASF уже запущен. Закройте его перед запуском второй копии."
+        log(message)
+        _show_startup_warning(message)
         return
+    if ensure_program_files_install(cfg):
+        release_instance_lock()
+        return
+    manages_asf = str(cfg.get("start_asf", "true")).lower() in ("1", "true", "yes", "on")
+    if not _ensure_no_legacy_instance(manages_asf):
+        release_instance_lock()
+        return
+    _merge_legacy_configs()
+    _flush_data_migration_notices()
     ensure_user_shortcuts(cfg)
     log(f"IPC цель: {host}:{port}  start_asf={cfg['start_asf']}  password={'да' if cfg['ipc_password'] else 'нет'}  ui_mode={ui_mode}")
 
@@ -3924,6 +4422,9 @@ def main():
                 log(f"Ошибка распаковки встроенного ASF: {e}")
             if not exe:
                 exe = find_asf_executable(cfg["asf_path"])
+            if not exe and str(cfg.get("asf_auto_download", "true")).lower() in ("1", "true", "yes", "on"):
+                set_asf_status("recovering", "Downloading the official ASF runtime from GitHub...")
+                exe = download_official_asf_runtime()
             if exe:
                 log(f"Найден ASF: {exe}")
                 try:
@@ -4145,6 +4646,7 @@ def main():
         proc = asf_holder.get("proc")
         if proc:
             proc.stop()
+        release_instance_lock()
 
     if ui_mode == "browser":
         browser_proc = launch_browser_app(local_url, cfg.get("browser_path", ""))

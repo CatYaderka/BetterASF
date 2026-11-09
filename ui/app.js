@@ -3,6 +3,13 @@
 
 const CFG = window.ASF_CONFIG || {};
 
+window.addEventListener('error', event => {
+  fetch('/__ui_error', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: String(event.message || 'unknown error') }) }).catch(() => {});
+});
+window.addEventListener('unhandledrejection', event => {
+  fetch('/__ui_error', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: String(event.reason && event.reason.message || event.reason || 'unhandled rejection') }) }).catch(() => {});
+});
+
 
 const I18N = {
   ru: {
@@ -12,9 +19,9 @@ const I18N = {
     dashboard_title: 'Главная', bots_title: 'Боты', commands_title: 'Команды', plugins_title: 'Плагины', log_title: 'Журнал', settings_title: 'Настройки',
     refresh: 'Обновить', execute: 'Выполнить', clear: 'Очистить', save: 'Сохранить', cancel: 'Отмена', remove: 'Удалить', install: 'Установить', installing: 'Установка…', removing: 'Удаление…',
     appearance_title: 'Оформление и темы', behavior_title: 'Поведение приложения', priority_games: 'Приоритетные игры для фарма часов', language_label: 'Язык интерфейса',
-    custom_theme: 'Кастомная тема', custom_theme_title: 'Кастомная тема', custom_theme_sub: 'Выберите светлую или тёмную основу, загрузите своё изображение и при необходимости сделайте элементы прозрачными.', custom_theme_base: 'Основа темы', custom_theme_dark: 'Тёмная', custom_theme_light: 'Светлая', custom_theme_image: 'Свой медиафон', custom_theme_image_hint: 'PNG, JPG, WebP, GIF, MP4 или WebM. Изображение до 12 МБ, видео до 50 МБ.', custom_theme_transparent: 'Включить прозрачность элементов', custom_theme_remove_image: 'Убрать картинку', custom_theme_saved: 'Своя тема сохранена', custom_theme_error: 'Не удалось сохранить свою тему', custom_theme_image_too_large: 'Изображение до 12 МБ, видео до 50 МБ', custom_theme_image_invalid: 'Выберите PNG, JPG, WebP, GIF, MP4 или WebM', custom_theme_image_loaded: 'Медиафон выбран',
+    custom_theme: 'Кастомная тема', custom_theme_title: 'Кастомная тема', custom_theme_sub: 'Выберите светлую или тёмную основу, загрузите своё изображение и при необходимости сделайте элементы прозрачными.', custom_theme_base: 'Основа темы', custom_theme_dark: 'Тёмная', custom_theme_light: 'Светлая', custom_theme_image: 'Свой медиафон', custom_theme_image_hint: 'PNG, JPG, WebP, GIF, MP4 или WebM. Изображение до 12 МБ, видео до 50 МБ.', custom_theme_transparent: 'Включить прозрачность элементов', custom_theme_remove_image: 'Убрать картинку', custom_theme_saved: 'Своя тема сохранена', custom_theme_error: 'Не удалось сохранить свою тему', custom_theme_image_too_large: 'Изображение до 12 МБ, видео до 50 МБ', custom_theme_image_invalid: 'Выберите PNG, JPG, WebP, GIF, MP4 или WebM', custom_theme_image_loaded: 'Медиафон выбран', custom_theme_auto_accent: 'Подобрать акцент из фона', custom_theme_auto_accent_hint: 'Активные вкладки, кнопки и акцентные элементы получат средний цвет фона.',
     kpi_games: 'Игр осталось', kpi_time: 'Времени осталось', kpi_cards: 'Карт осталось', dashboard_refresh: 'Обновить', commands_hint: 'Подсказки:', command_placeholder: 'Введите команду, напр. status ASF', command_output: 'Вывод команды появится здесь…',
-    appearance_sub: 'Выберите цветовую схему и фоновое изображение для интерфейса BetterASF.', behavior_sub: 'Настройки самого BetterASF. Они сохраняются в Documents\BetterASF\settings.json.',
+    appearance_sub: 'Выберите цветовую схему и фоновое изображение для интерфейса BetterASF.', behavior_sub: 'Настройки самого BetterASF. Они сохраняются в папке данных BetterASF.',
     tray_title: 'Сворачивание в трей', tray_sub: 'Кнопка закрытия будет сворачивать BetterASF, не завершая ASF.', minimized_title: 'Запуск в минимизированном состоянии', minimized_sub: 'После открытия BetterASF сразу свернётся; если включён трей — спрячется в трей.', autostart_title: 'Запуск вместе с системой', autostart_sub: 'Добавляет BetterASF в автозагрузку текущего пользователя Windows.', economy_title: 'Экономичный режим интерфейса', economy_sub: 'Отключает фоновые картинки, blur/тяжёлые тени, аватарки и реже обновляет данные.',
     auto_hours_title: 'Запуск фарма часов после карточек', auto_hours_sub: 'Когда обычный фарм карточек закончится, BetterASF автоматически запустит топ-32 игр по часам.', start_hours_title: 'Фарм часов при запуске BetterASF', start_hours_sub: 'При старте интерфейса сразу запускает топ-32 игр на аккаунтах без оставшихся карточек.', priority_hint: 'Эти AppID применяются к каждому аккаунту отдельно: если игра есть в библиотеке — она запускается, если нет — пропускается. После них список дополняется играми по часам.',
     plugins_library: 'Библиотека', plugins_store: 'Магазин плагинов', plugins_library_note: 'Установленные плагины ASF. После изменения ASF перезапускается автоматически.', plugins_store_note: 'Каталог и ZIP-релизы проверяются напрямую на GitHub. Устанавливайте только плагины, которым доверяете.',
@@ -34,9 +41,9 @@ const I18N = {
     dashboard_title: 'Dashboard', bots_title: 'Bots', commands_title: 'Commands', plugins_title: 'Plugins', log_title: 'Log', settings_title: 'Settings',
     refresh: 'Refresh', execute: 'Run', clear: 'Clear', save: 'Save', cancel: 'Cancel', remove: 'Remove', install: 'Install', installing: 'Installing…', removing: 'Removing…',
     appearance_title: 'Appearance and themes', behavior_title: 'Application behavior', priority_games: 'Priority games for hour farming', language_label: 'Interface language',
-    custom_theme: 'Custom theme', custom_theme_title: 'Custom theme', custom_theme_sub: 'Choose a light or dark base, upload your own image and optionally make interface elements transparent.', custom_theme_base: 'Theme base', custom_theme_dark: 'Dark', custom_theme_light: 'Light', custom_theme_image: 'Custom media background', custom_theme_image_hint: 'PNG, JPG, WebP, GIF, MP4 or WebM. Images up to 12 MB, videos up to 50 MB.', custom_theme_transparent: 'Enable transparent elements', custom_theme_remove_image: 'Remove image', custom_theme_saved: 'Custom theme saved', custom_theme_error: 'Could not save custom theme', custom_theme_image_too_large: 'Images are limited to 12 MB and videos to 50 MB', custom_theme_image_invalid: 'Select PNG, JPG, WebP, GIF, MP4 or WebM', custom_theme_image_loaded: 'Media background selected',
+    custom_theme: 'Custom theme', custom_theme_title: 'Custom theme', custom_theme_sub: 'Choose a light or dark base, upload your own image and optionally make interface elements transparent.', custom_theme_base: 'Theme base', custom_theme_dark: 'Dark', custom_theme_light: 'Light', custom_theme_image: 'Custom media background', custom_theme_image_hint: 'PNG, JPG, WebP, GIF, MP4 or WebM. Images up to 12 MB, videos up to 50 MB.', custom_theme_transparent: 'Enable transparent elements', custom_theme_remove_image: 'Remove image', custom_theme_saved: 'Custom theme saved', custom_theme_error: 'Could not save custom theme', custom_theme_image_too_large: 'Images are limited to 12 MB and videos to 50 MB', custom_theme_image_invalid: 'Select PNG, JPG, WebP, GIF, MP4 or WebM', custom_theme_image_loaded: 'Media background selected', custom_theme_auto_accent: 'Match accent to background', custom_theme_auto_accent_hint: 'Active tabs, buttons and accent elements will use the average background colour.',
     kpi_games: 'Games remaining', kpi_time: 'Time remaining', kpi_cards: 'Cards remaining', dashboard_refresh: 'Refresh', commands_hint: 'Hints:', command_placeholder: 'Enter a command, e.g. status ASF', command_output: 'Command output will appear here…',
-    appearance_sub: 'Choose the colour scheme and background image for the BetterASF interface.', behavior_sub: 'BetterASF settings. They are saved in Documents\BetterASF\settings.json.',
+    appearance_sub: 'Choose the colour scheme and background image for the BetterASF interface.', behavior_sub: 'BetterASF settings. They are saved in the BetterASF data folder.',
     tray_title: 'Minimize to tray', tray_sub: 'The Close button minimizes BetterASF without closing ASF.', minimized_title: 'Start minimized', minimized_sub: 'BetterASF minimizes immediately after opening; if tray is enabled, it hides in the tray.', autostart_title: 'Start with Windows', autostart_sub: 'Adds BetterASF to the current Windows user’s startup.', economy_title: 'Economy interface mode', economy_sub: 'Disables background images, blur/heavy shadows and avatars, and refreshes data less often.',
     auto_hours_title: 'Start hour farming after cards', auto_hours_sub: 'After normal card farming is finished, BetterASF starts the top 32 games by playtime.', start_hours_title: 'Hour farming on BetterASF startup', start_hours_sub: 'On interface startup, starts the top 32 games for accounts with no cards remaining.', priority_hint: 'These AppIDs apply to every account individually: a game is started only if the account owns it. The list is then filled with games selected by the chosen order.',
     plugins_library: 'Library', plugins_store: 'Plugin store', plugins_library_note: 'Installed ASF plugins. ASF restarts automatically after a change.', plugins_store_note: 'The catalogue and ZIP releases are checked directly on GitHub. Install only plugins you trust.',
@@ -56,9 +63,9 @@ const I18N = {
     dashboard_title: 'Головна', bots_title: 'Боти', commands_title: 'Команди', plugins_title: 'Плагіни', log_title: 'Журнал', settings_title: 'Налаштування',
     refresh: 'Оновити', execute: 'Виконати', clear: 'Очистити', save: 'Зберегти', cancel: 'Скасувати', remove: 'Видалити', install: 'Встановити', installing: 'Встановлення…', removing: 'Видалення…',
     appearance_title: 'Оформлення та теми', behavior_title: 'Поведінка програми', priority_games: 'Пріоритетні ігри для фарму годин', language_label: 'Мова інтерфейсу',
-    custom_theme: 'Власна тема', custom_theme_title: 'Власна тема', custom_theme_sub: 'Виберіть світлу або темну основу, завантажте своє зображення та за потреби зробіть елементи прозорими.', custom_theme_base: 'Основа теми', custom_theme_dark: 'Темна', custom_theme_light: 'Світла', custom_theme_image: 'Власний медіафон', custom_theme_image_hint: 'PNG, JPG, WebP, GIF, MP4 або WebM. Зображення до 12 МБ, відео до 50 МБ.', custom_theme_transparent: 'Увімкнути прозорість елементів', custom_theme_remove_image: 'Прибрати картинку', custom_theme_saved: 'Власну тему збережено', custom_theme_error: 'Не вдалося зберегти власну тему', custom_theme_image_too_large: 'Зображення до 12 МБ, відео до 50 МБ', custom_theme_image_invalid: 'Виберіть PNG, JPG, WebP, GIF, MP4 або WebM', custom_theme_image_loaded: 'Медіафон вибрано',
+    custom_theme: 'Власна тема', custom_theme_title: 'Власна тема', custom_theme_sub: 'Виберіть світлу або темну основу, завантажте своє зображення та за потреби зробіть елементи прозорими.', custom_theme_base: 'Основа теми', custom_theme_dark: 'Темна', custom_theme_light: 'Світла', custom_theme_image: 'Власний медіафон', custom_theme_image_hint: 'PNG, JPG, WebP, GIF, MP4 або WebM. Зображення до 12 МБ, відео до 50 МБ.', custom_theme_transparent: 'Увімкнути прозорість елементів', custom_theme_remove_image: 'Прибрати картинку', custom_theme_saved: 'Власну тему збережено', custom_theme_error: 'Не вдалося зберегти власну тему', custom_theme_image_too_large: 'Зображення до 12 МБ, відео до 50 МБ', custom_theme_image_invalid: 'Виберіть PNG, JPG, WebP, GIF, MP4 або WebM', custom_theme_image_loaded: 'Медіафон вибрано', custom_theme_auto_accent: 'Підібрати акцент із фону', custom_theme_auto_accent_hint: 'Активні вкладки, кнопки й акцентні елементи отримають середній колір фону.',
     kpi_games: 'Ігор залишилося', kpi_time: 'Часу залишилося', kpi_cards: 'Карток залишилося', dashboard_refresh: 'Оновити', commands_hint: 'Підказки:', command_placeholder: 'Введіть команду, напр. status ASF', command_output: 'Вивід команди з’явиться тут…',
-    appearance_sub: 'Виберіть кольорову схему та фонове зображення для інтерфейсу BetterASF.', behavior_sub: 'Налаштування самого BetterASF. Вони зберігаються в Documents\BetterASF\settings.json.',
+    appearance_sub: 'Виберіть кольорову схему та фонове зображення для інтерфейсу BetterASF.', behavior_sub: 'Налаштування самого BetterASF. Вони зберігаються в папці даних BetterASF.',
     tray_title: 'Згортання в трей', tray_sub: 'Кнопка закриття згортатиме BetterASF, не завершуючи ASF.', minimized_title: 'Запуск у згорнутому стані', minimized_sub: 'Після відкриття BetterASF одразу згорнеться; якщо ввімкнений трей — сховається в трей.', autostart_title: 'Запуск разом із системою', autostart_sub: 'Додає BetterASF до автозавантаження поточного користувача Windows.', economy_title: 'Економний режим інтерфейсу', economy_sub: 'Вимикає фонові картинки, blur/важкі тіні, аватарки та рідше оновлює дані.',
     auto_hours_title: 'Запуск фарму годин після карток', auto_hours_sub: 'Коли звичайний фарм карток завершиться, BetterASF автоматично запустить топ-32 ігор за годинами.', start_hours_title: 'Фарм годин під час запуску BetterASF', start_hours_sub: 'Під час запуску інтерфейсу одразу запускає топ-32 ігор на акаунтах без карток, що залишилися.', priority_hint: 'Ці AppID застосовуються до кожного акаунта окремо: гра запускається, якщо вона є в бібліотеці. Після них список доповнюється іграми за вибраним порядком.',
     plugins_library: 'Бібліотека', plugins_store: 'Магазин плагінів', plugins_library_note: 'Встановлені плагіни ASF. Після зміни ASF перезапускається автоматично.', plugins_store_note: 'Каталог і ZIP-релізи перевіряються безпосередньо на GitHub. Встановлюйте лише плагіни, яким довіряєте.',
@@ -171,9 +178,10 @@ let API_BASE = API_CANDIDATES[0] || '';
 let IPC_PASSWORD = CFG.password || localStorage.getItem('asf_ipc_password') || '';
 let pollTimer = null;
 let ECONOMY_MODE = false;
-let CUSTOM_THEME = { base: 'dark', transparent: false, mediaUrl: '', mediaType: '', hasMedia: false };
+let CUSTOM_THEME = { base: 'dark', transparent: false, accent: '', mediaUrl: '', mediaType: '', hasMedia: false };
 let CUSTOM_THEME_PENDING_MEDIA = '';
 let CUSTOM_THEME_PENDING_MEDIA_TYPE = '';
+let CUSTOM_THEME_PENDING_ACCENT = '';
 let CUSTOM_THEME_REMOVE_MEDIA = false;
 let CURRENT_FULL_THEME = CFG.theme || 'dark';
 
@@ -852,15 +860,21 @@ function botFormFields(name) {
   };
 }
 
+async function saveBotConfig(name) {
+  const fields = botFormFields(name);
+  const response = await fetch('/__botconfigs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields }) });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.ok) throw new Error(data.message || ('HTTP ' + response.status));
+  const hourMax = Math.max(1, Math.min(32, parseInt($('#ab-hour-max-games').value, 10) || 32));
+  HOUR_FARM_MAX_BY_BOT[name] = hourMax;
+  return data;
+}
+
 async function saveBot() {
   const name = $('#ab-name').value.trim();
   if (!name) { toast('Введите имя бота', 'err'); return; }
   try {
-    const response = await fetch('/__botconfigs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: botFormFields(name) }) });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok || !data.ok) throw new Error(data.message || ('HTTP ' + response.status));
-    const hourMax = Math.max(1, Math.min(32, parseInt($('#ab-hour-max-games').value, 10) || 32));
-    HOUR_FARM_MAX_BY_BOT[name] = hourMax;
+    await saveBotConfig(name);
     toast(_editingBot ? ('Сохранено: ' + name) : ('Бот создан: ' + name), 'ok');
     logEvent((_editingBot ? 'Изменён' : 'Создан') + ' бот: ' + name);
     closeAddBot();
@@ -1182,7 +1196,13 @@ async function startHourFarm() {
       body: '{}',
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok || !data.ok) throw new Error(data.message || ('HTTP ' + response.status));
+    if (!response.ok || !data.ok) {
+      if (data.needApiKey) {
+        openApiKeyModal();
+        return;
+      }
+      throw new Error(data.message || ('HTTP ' + response.status));
+    }
     await syncHourFarmState();
   } catch (e) {
     toast(e.message, 'err');
@@ -1497,12 +1517,14 @@ function customThemeMediaType(file) {
 
 function setCustomThemePreview(url, mediaType = '') {
   const preview = $('#custom-theme-preview');
+  const stage = $('#custom-theme-stage');
   if (!preview) return;
   preview.innerHTML = '';
   preview.style.backgroundImage = '';
   if (!url) {
     preview.classList.remove('show');
     preview.setAttribute('aria-hidden', 'true');
+    if (stage) stage.classList.remove('has-media');
     return;
   }
   if (mediaType === 'video') {
@@ -1519,6 +1541,7 @@ function setCustomThemePreview(url, mediaType = '') {
   }
   preview.classList.add('show');
   preview.setAttribute('aria-hidden', 'false');
+  if (stage) stage.classList.add('has-media');
 }
 
 function setCustomThemeVideo(url) {
@@ -1537,6 +1560,143 @@ function setCustomThemeVideo(url) {
   }
   video.classList.add('show');
   video.play().catch(() => {});
+}
+
+function themeHexToRgb(value) {
+  const match = /^#([0-9a-f]{6})$/i.exec(String(value || ''));
+  if (!match) return null;
+  const raw = match[1];
+  return { r: parseInt(raw.slice(0, 2), 16), g: parseInt(raw.slice(2, 4), 16), b: parseInt(raw.slice(4, 6), 16) };
+}
+
+function themeRgbToHex(r, g, b) {
+  const part = value => Math.max(0, Math.min(255, Math.round(value))).toString(16).padStart(2, '0');
+  return '#' + part(r) + part(g) + part(b);
+}
+
+function themeRgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0;
+  const l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > .5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) * 60;
+    else if (max === g) h = ((b - r) / d + 2) * 60;
+    else h = ((r - g) / d + 4) * 60;
+  }
+  return { h, s, l };
+}
+
+function themeHslToHex(h, s, l) {
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+  const m = l - c / 2;
+  let r = 0, g = 0, b = 0;
+  if (h < 60) [r, g, b] = [c, x, 0];
+  else if (h < 120) [r, g, b] = [x, c, 0];
+  else if (h < 180) [r, g, b] = [0, c, x];
+  else if (h < 240) [r, g, b] = [0, x, c];
+  else if (h < 300) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+  return themeRgbToHex((r + m) * 255, (g + m) * 255, (b + m) * 255);
+}
+
+function themeContrastColor(rgb) {
+  const value = (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000;
+  return value > 158 ? '#141318' : '#ffffff';
+}
+
+function applyCustomAccent(value, active) {
+  const root = document.documentElement;
+  const rgb = themeHexToRgb(value);
+  if (!active || !rgb) {
+    root.removeAttribute('data-custom-accent');
+    ['--accent', '--accent-2', '--glow', '--accent-glow', '--accent-contrast'].forEach(key => root.style.removeProperty(key));
+    return;
+  }
+  const hsl = themeRgbToHsl(rgb.r, rgb.g, rgb.b);
+  const accent = themeHslToHex(hsl.h, Math.max(.5, hsl.s), Math.max(.42, Math.min(.62, hsl.l)));
+  const accentRgb = themeHexToRgb(accent);
+  const second = themeHslToHex((hsl.h + 22) % 360, Math.max(.48, hsl.s * .86), Math.max(.43, Math.min(.66, hsl.l + .04)));
+  root.setAttribute('data-custom-accent', '1');
+  root.style.setProperty('--accent', accent);
+  root.style.setProperty('--accent-2', second);
+  root.style.setProperty('--glow', `rgba(${accentRgb.r},${accentRgb.g},${accentRgb.b},.42)`);
+  root.style.setProperty('--accent-glow', `rgba(${accentRgb.r},${accentRgb.g},${accentRgb.b},.14)`);
+  root.style.setProperty('--accent-contrast', themeContrastColor(accentRgb));
+}
+
+function averageThemeMediaColor(url, mediaType) {
+  return new Promise((resolve, reject) => {
+    if (!url) { reject(new Error('No custom background')); return; }
+    const canvas = document.createElement('canvas');
+    canvas.width = 40; canvas.height = 40;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    const sample = source => {
+      try {
+        context.drawImage(source, 0, 0, canvas.width, canvas.height);
+        const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
+        let r = 0, g = 0, b = 0, count = 0;
+        for (let index = 0; index < data.length; index += 4) {
+          if (data[index + 3] < 140) continue;
+          r += data[index]; g += data[index + 1]; b += data[index + 2]; count++;
+        }
+        if (!count) throw new Error('Background has no visible pixels');
+        const hsl = themeRgbToHsl(r / count, g / count, b / count);
+        resolve(themeHslToHex(hsl.h, Math.max(.5, hsl.s), Math.max(.42, Math.min(.62, hsl.l))));
+      } catch (error) { reject(error); }
+    };
+    if (mediaType === 'video') {
+      const video = document.createElement('video');
+      video.muted = true;
+      video.playsInline = true;
+      video.preload = 'auto';
+      video.onloadeddata = () => {
+        const frameTime = Math.min(.1, Number(video.duration || 0));
+        if (frameTime > 0) {
+          try { video.currentTime = frameTime; } catch (e) { sample(video); }
+        } else sample(video);
+      };
+      video.onseeked = () => sample(video);
+      video.onerror = () => reject(new Error('Video frame cannot be read'));
+      video.src = url;
+      video.load();
+    } else {
+      const image = new Image();
+      image.onload = () => sample(image);
+      image.onerror = () => reject(new Error('Image cannot be read'));
+      image.src = url;
+    }
+  });
+}
+
+function updateCustomThemeAccentButton() {
+  const button = $('#custom-theme-auto-accent');
+  if (!button) return;
+  button.disabled = !(CUSTOM_THEME_PENDING_MEDIA || CUSTOM_THEME.mediaUrl) || CUSTOM_THEME_REMOVE_MEDIA;
+}
+
+async function pickCustomThemeAccent() {
+  const url = CUSTOM_THEME_PENDING_MEDIA || CUSTOM_THEME.mediaUrl;
+  const mediaType = CUSTOM_THEME_PENDING_MEDIA ? CUSTOM_THEME_PENDING_MEDIA_TYPE : CUSTOM_THEME.mediaType;
+  const button = $('#custom-theme-auto-accent');
+  if (!url || !button) return;
+  const text = button.querySelector('span');
+  const original = text ? text.textContent : '';
+  button.disabled = true;
+  if (text) text.textContent = 'Подбираю акцент…';
+  try {
+    CUSTOM_THEME_PENDING_ACCENT = await averageThemeMediaColor(url, mediaType || 'image');
+    applyCustomAccent(CUSTOM_THEME_PENDING_ACCENT, true);
+    $('#custom-theme-accent-note').textContent = 'Акцент: ' + CUSTOM_THEME_PENDING_ACCENT.toUpperCase();
+  } catch (e) {
+    toast(t('custom_theme_error') + ': ' + e.message, 'err');
+  } finally {
+    if (text) text.textContent = original || t('custom_theme_auto_accent');
+    updateCustomThemeAccentButton();
+  }
 }
 
 function applyFullTheme(theme, persist = true) {
@@ -1562,6 +1722,7 @@ function applyFullTheme(theme, persist = true) {
   }
 
   setCustomThemeVideo(customVideo ? CUSTOM_THEME.mediaUrl : '');
+  applyCustomAccent(CUSTOM_THEME.accent, isCustom && !!CUSTOM_THEME.accent);
   if (isCustom && CUSTOM_THEME.transparent) document.documentElement.setAttribute('data-custom-transparent', '1');
   else document.documentElement.removeAttribute('data-custom-transparent');
 
@@ -1582,6 +1743,7 @@ async function loadCustomTheme() {
     CUSTOM_THEME = {
       base: state.base === 'light' ? 'light' : 'dark',
       transparent: !!state.transparent,
+      accent: themeHexToRgb(state.accent) ? state.accent : '',
       mediaUrl: state.mediaUrl || state.imageUrl || '',
       mediaType: state.mediaType || 'image',
       hasMedia: !!(state.hasMedia || state.hasImage),
@@ -1597,6 +1759,7 @@ async function openCustomThemeModal() {
   await loadCustomTheme();
   CUSTOM_THEME_PENDING_MEDIA = '';
   CUSTOM_THEME_PENDING_MEDIA_TYPE = '';
+  CUSTOM_THEME_PENDING_ACCENT = CUSTOM_THEME.accent || '';
   CUSTOM_THEME_REMOVE_MEDIA = false;
   const base = CUSTOM_THEME.base === 'light' ? 'light' : 'dark';
   const radio = $(`input[name="custom-theme-base"][value="${base}"]`);
@@ -1604,6 +1767,8 @@ async function openCustomThemeModal() {
   $('#custom-theme-transparent').checked = !!CUSTOM_THEME.transparent;
   $('#custom-theme-file').value = '';
   $('#custom-theme-file-note').textContent = t('custom_theme_image_hint');
+  $('#custom-theme-accent-note').textContent = CUSTOM_THEME.accent ? ('Акцент: ' + CUSTOM_THEME.accent.toUpperCase()) : t('custom_theme_auto_accent_hint');
+  updateCustomThemeAccentButton();
   setCustomThemePreview(CUSTOM_THEME.mediaUrl, CUSTOM_THEME.mediaType);
   $('#custom-theme-modal').classList.add('show');
   $('#custom-theme-modal').setAttribute('aria-hidden', 'false');
@@ -1614,7 +1779,9 @@ function closeCustomThemeModal() {
   $('#custom-theme-modal').setAttribute('aria-hidden', 'true');
   CUSTOM_THEME_PENDING_MEDIA = '';
   CUSTOM_THEME_PENDING_MEDIA_TYPE = '';
+  CUSTOM_THEME_PENDING_ACCENT = '';
   CUSTOM_THEME_REMOVE_MEDIA = false;
+  applyFullTheme(CURRENT_FULL_THEME, false);
 }
 
 function readCustomThemeImage(file) {
@@ -1636,7 +1803,9 @@ function readCustomThemeImage(file) {
   reader.onload = () => {
     CUSTOM_THEME_PENDING_MEDIA = String(reader.result || '');
     CUSTOM_THEME_PENDING_MEDIA_TYPE = mediaType;
+    CUSTOM_THEME_PENDING_ACCENT = '';
     CUSTOM_THEME_REMOVE_MEDIA = false;
+    updateCustomThemeAccentButton();
     setCustomThemePreview(CUSTOM_THEME_PENDING_MEDIA, mediaType);
     $('#custom-theme-file-note').textContent = t('custom_theme_image_loaded') + ': ' + file.name;
   };
@@ -1646,7 +1815,7 @@ function readCustomThemeImage(file) {
 async function saveCustomTheme() {
   const button = $('#custom-theme-save');
   const base = ($('input[name="custom-theme-base"]:checked') || {}).value === 'light' ? 'light' : 'dark';
-  const payload = { base, transparent: !!$('#custom-theme-transparent').checked, removeImage: CUSTOM_THEME_REMOVE_MEDIA };
+  const payload = { base, transparent: !!$('#custom-theme-transparent').checked, removeImage: CUSTOM_THEME_REMOVE_MEDIA, accent: CUSTOM_THEME_REMOVE_MEDIA ? '' : CUSTOM_THEME_PENDING_ACCENT };
   if (CUSTOM_THEME_PENDING_MEDIA) payload.imageData = CUSTOM_THEME_PENDING_MEDIA;
   button.disabled = true;
   try {
@@ -1654,6 +1823,7 @@ async function saveCustomTheme() {
     CUSTOM_THEME = {
       base: state.base === 'light' ? 'light' : 'dark',
       transparent: !!state.transparent,
+      accent: themeHexToRgb(state.accent) ? state.accent : '',
       mediaUrl: state.mediaUrl || '',
       mediaType: state.mediaType || 'image',
       hasMedia: !!state.hasMedia,
@@ -1921,12 +2091,15 @@ function init() {
   $('#custom-theme-add').onclick = openCustomThemeModal;
   $('#custom-theme-cancel').onclick = closeCustomThemeModal;
   $('#custom-theme-save').onclick = saveCustomTheme;
+  $('#custom-theme-auto-accent').onclick = pickCustomThemeAccent;
   $('#custom-theme-file').onchange = e => readCustomThemeImage(e.target.files && e.target.files[0]);
   $('#custom-theme-remove-image').onclick = () => {
     CUSTOM_THEME_PENDING_MEDIA = '';
     CUSTOM_THEME_PENDING_MEDIA_TYPE = '';
+    CUSTOM_THEME_PENDING_ACCENT = '';
     CUSTOM_THEME_REMOVE_MEDIA = true;
     $('#custom-theme-file').value = '';
+    updateCustomThemeAccentButton();
     setCustomThemePreview('');
     $('#custom-theme-file-note').textContent = t('custom_theme_remove_image');
   };
@@ -2091,6 +2264,7 @@ function init() {
 
   setConnStarting();
   logEvent('Интерфейс готов. ASF запускается в фоне.');
+  fetch('/__ui_ready', { method: 'POST' }).catch(() => {});
 
   setTimeout(() => {
     fetch('/__health').then(r => r.json()).then(h => {
